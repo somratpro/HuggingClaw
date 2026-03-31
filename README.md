@@ -38,7 +38,7 @@ Works with **any LLM** (Anthropic, OpenAI, Google), connects via **Telegram**, a
 ## 🚀 Quick Start
 
 ### 1. Duplicate this Space
-Click [**"Duplicate this Space"**](https://huggingface.co/somratpro/HuggingClaw) → name it → set to **Private**
+Click [**"Duplicate this Space"**](https://huggingface.co/spaces/somratpro/HuggingClaw) → name it → set to **Private**
 
 ### 2. Add Required Secrets
 Go to **Settings → Secrets**:
