@@ -36,6 +36,11 @@ Works with **any LLM** (Anthropic, OpenAI, Google), connects via **Telegram**, a
 
 ---
 
+## 🎥 Video Tutorial
+https://www.youtube.com/watch?v=S6pl7NmjX7g&t=73s
+
+---
+
 ## 🚀 Quick Start
 
 ### 1. Duplicate this Space
