@@ -12,12 +12,10 @@ const path = require("path");
 const { WebSocket } = require('/home/node/.openclaw/openclaw-app/node_modules/ws');
 const { randomUUID } = require('node:crypto');
 
-const GATEWAY_WS_URL = "ws://127.0.0.1:7860";
-const GATEWAY_ORIGIN = "http://127.0.0.1:7860";
+const GATEWAY_URL = "ws://127.0.0.1:7860";
 const GATEWAY_TOKEN = process.env.GATEWAY_TOKEN || "huggingclaw";
 const CHECK_INTERVAL = 5000;
 const WAIT_TIMEOUT = 120000;
-const AUTH_FAILURE_COOLDOWN = 5 * 60 * 1000;
 const POST_515_NO_LOGOUT_MS = 90 * 1000;
 const RESET_MARKER_PATH = path.join(
   process.env.HOME || "/home/node",
@@ -28,8 +26,6 @@ const RESET_MARKER_PATH = path.join(
 
 let isWaiting = false;
 let hasShownWaitMessage = false;
-let authFailureUntil = 0;
-let authFailureLogged = false;
 let last515At = 0;
 
 function extractErrorMessage(msg) {
@@ -52,12 +48,7 @@ function writeResetMarker() {
 
 async function createConnection() {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(
-      `${GATEWAY_WS_URL}/?token=${encodeURIComponent(GATEWAY_TOKEN)}`,
-      {
-        headers: { Origin: GATEWAY_ORIGIN },
-      },
-    );
+    const ws = new WebSocket(GATEWAY_URL);
     let resolved = false;
 
     ws.on("message", (data) => {
@@ -71,10 +62,17 @@ async function createConnection() {
           params: {
             minProtocol: 3,
             maxProtocol: 3,
+            client: {
+              id: "gateway-client",
+              version: "1.0.0",
+              platform: "linux",
+              mode: "backend",
+            },
+            caps: [],
             auth: { token: GATEWAY_TOKEN },
-            client: { id: "huggingclaw-wa-guardian", platform: "web", mode: "ui", version: "1.0.0" },
-            scopes: ["operator.admin", "operator.pairing", "operator.read", "operator.write"],
-          }
+            role: "operator",
+            scopes: ["operator.admin"],
+          },
         }));
         return;
       }
@@ -119,13 +117,10 @@ async function callRpc(ws, method, params) {
 
 async function checkStatus() {
   if (isWaiting) return;
-  if (Date.now() < authFailureUntil) return;
 
   let ws;
   try {
     ws = await createConnection();
-    authFailureUntil = 0;
-    authFailureLogged = false;
 
     // Check if WhatsApp channel exists and its status
     const statusRes = await callRpc(ws, "channels.status", {});
@@ -205,15 +200,7 @@ async function checkStatus() {
     }
 
   } catch (e) {
-    const message = e && e.message ? e.message : "";
-    if (/unauthorized|authentication|too many failed/i.test(message)) {
-      authFailureUntil = Date.now() + AUTH_FAILURE_COOLDOWN;
-      if (!authFailureLogged) {
-        console.log(`[guardian] Authentication failed (${message}). Pausing guardian retries for ${AUTH_FAILURE_COOLDOWN / 60000} minutes.`);
-        authFailureLogged = true;
-      }
-    }
-    // Normal timeout or gateway starting up
+    // Normal timeout or gateway starting up; retry on the next interval.
   } finally {
     isWaiting = false;
     if (ws) ws.close();
@@ -222,4 +209,4 @@ async function checkStatus() {
 
 console.log("[guardian] ⚔️ WhatsApp Guardian active. Monitoring pairing status...");
 setInterval(checkStatus, CHECK_INTERVAL);
-setTimeout(checkStatus, 10000);
+setTimeout(checkStatus, 15000);
