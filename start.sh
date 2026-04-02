@@ -163,6 +163,23 @@ if [ -n "$HF_USERNAME" ] && [ -n "$HF_TOKEN" ]; then
   cd /
 fi
 
+# ── Restore persisted WhatsApp credentials (if present) ──
+WA_BACKUP_DIR="/home/node/.openclaw/workspace/.huggingclaw-state/credentials/whatsapp/default"
+WA_CREDS_DIR="/home/node/.openclaw/credentials/whatsapp/default"
+if [ -d "$WA_BACKUP_DIR" ]; then
+  WA_FILE_COUNT=$(find "$WA_BACKUP_DIR" -type f | wc -l | tr -d ' ')
+  if [ "$WA_FILE_COUNT" -ge 2 ]; then
+    echo "📱 Restoring WhatsApp credentials..."
+    rm -rf "$WA_CREDS_DIR"
+    mkdir -p "$(dirname "$WA_CREDS_DIR")"
+    cp -R "$WA_BACKUP_DIR" "$WA_CREDS_DIR"
+    chmod -R go-rwx /home/node/.openclaw/credentials/whatsapp 2>/dev/null || true
+    echo "  ✅ WhatsApp credentials restored"
+  else
+    echo "  ⚠️  Saved WhatsApp credentials look incomplete (${WA_FILE_COUNT} files), skipping restore."
+  fi
+fi
+
 # ── Build config ──
 CONFIG_JSON=$(cat <<'CONFIGEOF'
 {
@@ -243,8 +260,8 @@ CONFIG_JSON=$(echo "$CONFIG_JSON" | jq '.channels.whatsapp = {"dmPolicy": "pairi
 echo "$CONFIG_JSON" > "/home/node/.openclaw/openclaw.json"
 chmod 600 /home/node/.openclaw/openclaw.json
 
-# ── Enable Iframe Fix (Security: No Token Redirect) ──
-# This Node.js preload script strips X-Frame-Options to allow HF Space embedding
+# ── Enable Gateway Preload Fixes ──
+# This preload script keeps iframe embedding working on HF Spaces.
 export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--require /home/node/app/iframe-fix.cjs"
 
 # ── Startup Summary ──

@@ -11,10 +11,15 @@ import os
 import sys
 import time
 import signal
+import shutil
 import subprocess
 from pathlib import Path
 
 WORKSPACE = Path("/home/node/.openclaw/workspace")
+STATE_DIR = WORKSPACE / ".huggingclaw-state"
+WHATSAPP_CREDS_DIR = Path("/home/node/.openclaw/credentials/whatsapp/default")
+WHATSAPP_BACKUP_DIR = STATE_DIR / "credentials" / "whatsapp" / "default"
+RESET_MARKER = WORKSPACE / ".reset_credentials"
 INTERVAL = int(os.environ.get("SYNC_INTERVAL", "600"))
 HF_TOKEN = os.environ.get("HF_TOKEN", "")
 HF_USERNAME = os.environ.get("HF_USERNAME", "")
@@ -29,6 +34,47 @@ def signal_handler(sig, frame):
 
 signal.signal(signal.SIGTERM, signal_handler)
 signal.signal(signal.SIGINT, signal_handler)
+
+
+def count_files(path: Path) -> int:
+    """Count regular files recursively under a path."""
+    if not path.exists():
+        return 0
+    return sum(1 for child in path.rglob("*") if child.is_file())
+
+
+def snapshot_state_into_workspace() -> None:
+    """
+    Mirror persistent state into the workspace-backed dataset repo.
+
+    This keeps WhatsApp credentials in a hidden folder that is synced together
+    with the workspace, without changing the live credentials location.
+    """
+    try:
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
+
+        if RESET_MARKER.exists():
+            if WHATSAPP_BACKUP_DIR.exists():
+                shutil.rmtree(WHATSAPP_BACKUP_DIR, ignore_errors=True)
+                print("🧹 Removed backed-up WhatsApp credentials after reset request.")
+            RESET_MARKER.unlink(missing_ok=True)
+            return
+
+        if not WHATSAPP_CREDS_DIR.exists():
+            return
+
+        file_count = count_files(WHATSAPP_CREDS_DIR)
+        if file_count < 2:
+            if file_count > 0:
+                print(f"📦 WhatsApp backup skipped: credentials incomplete ({file_count} files).")
+            return
+
+        WHATSAPP_BACKUP_DIR.parent.mkdir(parents=True, exist_ok=True)
+        if WHATSAPP_BACKUP_DIR.exists():
+            shutil.rmtree(WHATSAPP_BACKUP_DIR, ignore_errors=True)
+        shutil.copytree(WHATSAPP_CREDS_DIR, WHATSAPP_BACKUP_DIR)
+    except Exception as e:
+        print(f"  ⚠️ Could not snapshot WhatsApp state: {e}")
 
 
 def has_changes():
@@ -142,6 +188,8 @@ def main():
 
     use_hf_hub = bool(HF_TOKEN and HF_USERNAME)
 
+    snapshot_state_into_workspace()
+
     if use_hf_hub:
         print(f"🔄 Workspace sync started (huggingface_hub): every {INTERVAL}s → {HF_USERNAME}/{BACKUP_DATASET}")
     else:
@@ -155,6 +203,8 @@ def main():
         time.sleep(INTERVAL)
         if not running:
             break
+
+        snapshot_state_into_workspace()
 
         if not has_changes():
             continue

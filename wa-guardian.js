@@ -7,6 +7,8 @@
  */
 "use strict";
 
+const fs = require("fs");
+const path = require("path");
 const { WebSocket } = require('/home/node/.openclaw/openclaw-app/node_modules/ws');
 const { randomUUID } = require('node:crypto');
 
@@ -15,11 +17,19 @@ const GATEWAY_TOKEN = process.env.GATEWAY_TOKEN || "huggingclaw";
 const CHECK_INTERVAL = 5000;
 const WAIT_TIMEOUT = 120000;
 const AUTH_FAILURE_COOLDOWN = 5 * 60 * 1000;
+const POST_515_NO_LOGOUT_MS = 90 * 1000;
+const RESET_MARKER_PATH = path.join(
+  process.env.HOME || "/home/node",
+  ".openclaw",
+  "workspace",
+  ".reset_credentials",
+);
 
 let isWaiting = false;
 let hasShownWaitMessage = false;
 let authFailureUntil = 0;
 let authFailureLogged = false;
+let last515At = 0;
 
 function extractErrorMessage(msg) {
   if (!msg || typeof msg !== "object") return "Unknown error";
@@ -27,6 +37,16 @@ function extractErrorMessage(msg) {
   if (msg.error && typeof msg.error.message === "string") return msg.error.message;
   if (typeof msg.message === "string") return msg.message;
   return "Unknown error";
+}
+
+function writeResetMarker() {
+  try {
+    fs.mkdirSync(path.dirname(RESET_MARKER_PATH), { recursive: true });
+    fs.writeFileSync(RESET_MARKER_PATH, "reset\n");
+    console.log(`[guardian] Created backup reset marker at ${RESET_MARKER_PATH}`);
+  } catch (error) {
+    console.log(`[guardian] Failed to write backup reset marker: ${error.message}`);
+  }
 }
 
 async function createConnection() {
@@ -76,6 +96,10 @@ async function callRpc(ws, method, params) {
       const msg = JSON.parse(data.toString());
       if (msg.id === id) {
         ws.removeListener("message", handler);
+        if (msg.ok === false) {
+          reject(new Error(extractErrorMessage(msg)));
+          return;
+        }
         resolve(msg);
       }
     };
@@ -105,8 +129,34 @@ async function checkStatus() {
       return;
     }
 
+    const lastError = String(wa.lastError || "").toLowerCase();
+    const recentlySaw515 = Date.now() - last515At < POST_515_NO_LOGOUT_MS;
+    const needsLogout = wa.linked && !wa.connected && !recentlySaw515 &&
+      (
+        lastError.includes("401") ||
+        lastError.includes("unauthorized") ||
+        lastError.includes("logged out") ||
+        lastError.includes("440") ||
+        lastError.includes("conflict")
+      );
+
+    if (needsLogout) {
+      console.log("[guardian] Clearing invalid WhatsApp session so a fresh QR can be used...");
+      try {
+        await callRpc(ws, "channels.logout", { channel: "whatsapp" });
+        writeResetMarker();
+        hasShownWaitMessage = false;
+        console.log("[guardian] Logged out invalid WhatsApp session.");
+      } catch (error) {
+        console.log(`[guardian] Failed to log out invalid session: ${error.message}`);
+      }
+      ws.close();
+      return;
+    }
+
     // If connected, we are good
     if (wa.connected) {
+      hasShownWaitMessage = false;
       ws.close();
       return;
     }
@@ -121,17 +171,29 @@ async function checkStatus() {
     console.log("[guardian] Waiting for pairing completion...");
     const waitRes = await callRpc(ws, "web.login.wait", { timeoutMs: WAIT_TIMEOUT });
     const result = waitRes.payload || waitRes.result;
+    const message = result?.message || "";
+    const linkedAfter515 = !result?.connected && message.includes("515");
 
-    if (result && (result.connected || (result.message && result.message.includes("515")))) {
-      console.log("[guardian] ✅ Pairing completed! Saving session and restarting gateway...");
+    if (linkedAfter515) {
+      last515At = Date.now();
+    }
+
+    if (result && (result.connected || linkedAfter515)) {
       hasShownWaitMessage = false;
-      
-      // Auto-reapply config to finalize pairing
+
+      if (linkedAfter515) {
+        console.log("[guardian] 515 after scan: credentials saved, reloading config to start WhatsApp...");
+      } else {
+        console.log("[guardian] ✅ Pairing completed! Reloading config...");
+      }
+
       const getRes = await callRpc(ws, "config.get", {});
-      if (getRes.ok) {
+      if (getRes.payload?.raw && getRes.payload?.hash) {
         await callRpc(ws, "config.apply", { raw: getRes.payload.raw, baseHash: getRes.payload.hash });
         console.log("[guardian] Configuration re-applied.");
       }
+    } else if (!message.includes("No active") && !message.includes("Still waiting")) {
+      console.log(`[guardian] Wait result: ${message}`);
     }
 
   } catch (e) {

@@ -44,12 +44,12 @@ license: mit
 - 🔌 **Any LLM:** Use Claude, OpenAI GPT, Google Gemini, Grok, DeepSeek, Qwen, and 40+ providers (set `LLM_API_KEY` and `LLM_MODEL` accordingly).
 - ⚡ **Zero Config:** Duplicate this Space and set **just three** secrets (LLM_API_KEY, LLM_MODEL, GATEWAY_TOKEN) – no other setup needed.
 - 🐳 **Fast Builds:** Uses a pre-built OpenClaw Docker image to deploy in minutes.
-- 💾 **Workspace Backup:** Chats and settings sync to a private HF Dataset via the `huggingface_hub` (Git fallback), preserving data automatically.
+- 💾 **Workspace Backup:** Chats, settings, and WhatsApp session state sync to a private HF Dataset via the `huggingface_hub` (Git fallback), preserving data automatically.
 - 💓 **Always-On:** Built-in keep-alive pings prevent the HF Space from sleeping, so the assistant is always online.
 - 👥 **Multi-User Messaging:** Support for Telegram (multi-user) and WhatsApp (pairing).
 - 📊 **Visual Dashboard:** Beautiful Web UI to monitor uptime, sync status, and active models.
 - 🔔 **Webhooks:** Get notified on restarts or backup failures via standard webhooks.
-- 🔐 **Flexible Auth:** Secure the Control UI with either a gateway token or password.
+- 🔐 **Flexible Auth:** Secure the Control UI with either a gateway token or password, with automatic token redirect for the web UI.
 - 🏠 **100% HF-Native:** Runs entirely on HuggingFace’s free infrastructure (2 vCPU, 16GB RAM).
 
 ## 🎥 Video Tutorial
@@ -102,6 +102,8 @@ To use WhatsApp:
 2. In the Control UI, go to **Channels** → **WhatsApp** → **Login**.
 3. Scan the QR code with your phone. 📱
 
+The Control UI now redirects to `/?token=...` automatically, so you usually won't need to paste `GATEWAY_TOKEN` manually in the browser.
+
 ## 💾 Workspace Backup *(Optional)*
 
 For persistent chat history and configuration:
@@ -109,7 +111,7 @@ For persistent chat history and configuration:
 - Set `HF_USERNAME` to your HuggingFace username.
 - Set `HF_TOKEN` to a HuggingFace token with write access.
 
-Optionally set `BACKUP_DATASET_NAME` (default: `huggingclaw-backup`) to choose the HF Dataset name. On first run, HuggingClaw will create (or use) the private Dataset repo `HF_USERNAME/SPACE-backup`, then restore your workspace on startup and sync changes every 10 minutes. The workspace is also saved on graceful shutdown. This ensures your data survives restarts.
+Optionally set `BACKUP_DATASET_NAME` (default: `huggingclaw-backup`) to choose the HF Dataset name. On first run, HuggingClaw will create (or use) the private Dataset repo `HF_USERNAME/SPACE-backup`, then restore your workspace on startup and sync changes every 10 minutes. The workspace is also saved on graceful shutdown. If you use WhatsApp, HuggingClaw also stores a hidden backup of the WhatsApp session credentials so paired logins can survive restarts.
 
 ## 📊 Dashboard & Monitoring
 
@@ -289,7 +291,8 @@ HuggingClaw keeps the Space awake without external cron tools:
 - **Backup restore failing:** Make sure `HF_USERNAME` and `HF_TOKEN` are correct (token needs write access to your Dataset).
 - **Space keeps sleeping:** Check logs for `Keep-alive` messages. Ensure `KEEP_ALIVE_INTERVAL` isn’t set to `0`.
 - **Auth errors / proxy:** If you see reverse-proxy auth errors, add the logged IPs under `TRUSTED_PROXIES` (from logs `remote=x.x.x.x`).
-- **Control UI says too many failed authentication attempts:** Wait for the retry window to expire, then open the Space in an incognito window or clear site storage for your Space before entering the current `GATEWAY_TOKEN` again.
+- **Control UI says too many failed authentication attempts:** Wait for the retry window to expire, then open the Space in an incognito window or clear site storage for your Space. The root UI now auto-injects the current `GATEWAY_TOKEN`, so a fresh browser session usually fixes stale-token lockouts.
+- **WhatsApp lost its session after restart:** Make sure `HF_USERNAME` and `HF_TOKEN` are configured so the hidden session backup can be restored on boot.
 - **UI blocked (CORS):** Set `ALLOWED_ORIGINS=https://your-space-name.hf.space`.
 - **Version mismatches:** Pin a specific OpenClaw build with the `OPENCLAW_VERSION` Variable in HF Spaces, or `--build-arg OPENCLAW_VERSION=...` locally.
 
