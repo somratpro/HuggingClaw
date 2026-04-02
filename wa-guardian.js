@@ -17,6 +17,7 @@ const GATEWAY_TOKEN = process.env.GATEWAY_TOKEN || "huggingclaw";
 const CHECK_INTERVAL = 5000;
 const WAIT_TIMEOUT = 120000;
 const POST_515_NO_LOGOUT_MS = 90 * 1000;
+const SUCCESS_COOLDOWN_MS = 60 * 1000;
 const RESET_MARKER_PATH = path.join(
   process.env.HOME || "/home/node",
   ".openclaw",
@@ -27,6 +28,7 @@ const RESET_MARKER_PATH = path.join(
 let isWaiting = false;
 let hasShownWaitMessage = false;
 let last515At = 0;
+let lastConnectedAt = 0;
 
 function extractErrorMessage(msg) {
   if (!msg || typeof msg !== "object") return "Unknown error";
@@ -117,10 +119,27 @@ async function callRpc(ws, method, params) {
 
 async function checkStatus() {
   if (isWaiting) return;
+  if (lastConnectedAt && Date.now() - lastConnectedAt < SUCCESS_COOLDOWN_MS) return;
 
   let ws;
   try {
     ws = await createConnection();
+
+    const statusRes = await callRpc(ws, "channels.status", {});
+    const channels = (statusRes.payload || statusRes.result)?.channels || {};
+    const wa = channels.whatsapp;
+
+    if (!wa) {
+      hasShownWaitMessage = false;
+      return;
+    }
+
+    if (wa.connected) {
+      hasShownWaitMessage = false;
+      lastConnectedAt = Date.now();
+      return;
+    }
+
     isWaiting = true;
     if (!hasShownWaitMessage) {
       console.log("\n[guardian] 📱 WhatsApp pairing in progress. Please scan the QR code in the Control UI.");
@@ -139,6 +158,7 @@ async function checkStatus() {
 
     if (result && (result.connected || linkedAfter515)) {
       hasShownWaitMessage = false;
+      lastConnectedAt = Date.now();
 
       if (linkedAfter515) {
         console.log("[guardian] 515 after scan: credentials saved, reloading config to start WhatsApp...");
