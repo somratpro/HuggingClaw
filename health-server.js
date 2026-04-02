@@ -97,9 +97,17 @@ function createGatewayConnection() {
           id: randomUUID(),
           method: "connect",
           params: {
+            minProtocol: 3,
+            maxProtocol: 3,
             auth: { token: GATEWAY_TOKEN },
             client: { id: "health-server", platform: "linux", mode: "backend", version: "1.0.0" },
+            role: "operator",
             scopes: ["operator.read"],
+            caps: [],
+            commands: [],
+            permissions: {},
+            locale: "en-US",
+            userAgent: "huggingclaw-health-server/1.0.0",
           },
         }));
         return;

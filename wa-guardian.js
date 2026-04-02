@@ -63,9 +63,17 @@ async function createConnection() {
           id: randomUUID(),
           method: "connect",
           params: {
+            minProtocol: 3,
+            maxProtocol: 3,
             auth: { token: GATEWAY_TOKEN },
             client: { id: "wa-guardian", platform: "linux", mode: "backend", version: "1.0.0" },
-            scopes: ["operator.admin", "operator.pairing", "operator.read", "operator.write"]
+            role: "operator",
+            scopes: ["operator.admin", "operator.pairing", "operator.read", "operator.write"],
+            caps: [],
+            commands: [],
+            permissions: {},
+            locale: "en-US",
+            userAgent: "huggingclaw-wa-guardian/1.0.0",
           }
         }));
         return;
