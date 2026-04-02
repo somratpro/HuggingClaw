@@ -242,6 +242,10 @@ CONFIG_JSON=$(echo "$CONFIG_JSON" | jq '.channels.whatsapp = {"dmPolicy": "pairi
 echo "$CONFIG_JSON" > "/home/node/.openclaw/openclaw.json"
 chmod 600 /home/node/.openclaw/openclaw.json
 
+# ── Enable Iframe Fix (Security: No Token Redirect) ──
+# This Node.js preload script strips X-Frame-Options to allow HF Space embedding
+export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--require /home/node/app/iframe-fix.cjs"
+
 # ── Startup Summary ──
 echo ""
 echo "  ┌──────────────────────────────────────────┐"

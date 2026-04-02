@@ -6,7 +6,6 @@ const PORT = process.env.HEALTH_PORT || 7861;
 const startTime = Date.now();
 const LLM_MODEL = process.env.LLM_MODEL || "Not Set";
 const GATEWAY_TOKEN = process.env.GATEWAY_TOKEN || "huggingclaw";
-const SPACE_HOST = process.env.SPACE_HOST || "localhost:7860";
 const TELEGRAM_ENABLED = !!process.env.TELEGRAM_BOT_TOKEN;
 
 const server = http.createServer((req, res) => {
@@ -47,16 +46,6 @@ const server = http.createServer((req, res) => {
         token: GATEWAY_TOKEN,
       }),
     );
-    return;
-  }
-
-  // Auto-login redirect to OpenClaw Control UI
-  if (req.url === "/login") {
-    const protocol = req.headers["x-forwarded-proto"] || "http";
-    const host = req.headers["host"] || SPACE_HOST;
-    const target = `${protocol}://${host}/?token=${GATEWAY_TOKEN}`;
-    res.writeHead(302, { Location: target });
-    res.end();
     return;
   }
 
@@ -262,7 +251,7 @@ const server = http.createServer((req, res) => {
                 <span class="stat-label">Telegram</span>
                 <span id="tg-status">Loading...</span>
             </div>
-            <a href="/login" class="stat-btn">🚀 Open Control UI</a>
+            <a href="/" class="stat-btn">🚀 Open Control UI</a>
         </div>
 
         <div class="stat-card" style="width: 100%;">
