@@ -71,7 +71,7 @@ async function createConnection() {
             caps: [],
             auth: { token: GATEWAY_TOKEN },
             role: "operator",
-            scopes: ["operator.admin"],
+            scopes: ["operator.read", "operator.write", "operator.admin", "operator.pairing"],
           },
         }));
         return;
