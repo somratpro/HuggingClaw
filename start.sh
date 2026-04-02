@@ -349,14 +349,6 @@ HEALTH_PID=$!
 /home/node/app/keep-alive.sh &
 KEEP_ALIVE_PID=$!
 
-# 12. Start WhatsApp Guardian (Automates pairing)
-node /home/node/app/wa-guardian.js &
-GUARDIAN_PID=$!
-echo "🛡️ WhatsApp Guardian started (PID: $GUARDIAN_PID)"
-
-# 13. Start Workspace Sync
-python3 -u /home/node/app/workspace-sync.py &
-
 # ── Launch gateway ──
 echo "🚀 Launching OpenClaw gateway on port 7860..."
 echo ""
@@ -375,6 +367,14 @@ if ! kill -0 $GATEWAY_PID 2>/dev/null; then
   tail -30 /home/node/.openclaw/gateway.log
   exit 1
 fi
+
+# 12. Start WhatsApp Guardian after the gateway is accepting connections
+node /home/node/app/wa-guardian.js &
+GUARDIAN_PID=$!
+echo "🛡️ WhatsApp Guardian started (PID: $GUARDIAN_PID)"
+
+# 13. Start Workspace Sync after startup settles
+python3 -u /home/node/app/workspace-sync.py &
 
 # Wait for gateway (allows trap to fire)
 wait $GATEWAY_PID

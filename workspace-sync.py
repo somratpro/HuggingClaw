@@ -21,6 +21,7 @@ WHATSAPP_CREDS_DIR = Path("/home/node/.openclaw/credentials/whatsapp/default")
 WHATSAPP_BACKUP_DIR = STATE_DIR / "credentials" / "whatsapp" / "default"
 RESET_MARKER = WORKSPACE / ".reset_credentials"
 INTERVAL = int(os.environ.get("SYNC_INTERVAL", "600"))
+INITIAL_DELAY = int(os.environ.get("SYNC_START_DELAY", "10"))
 HF_TOKEN = os.environ.get("HF_TOKEN", "")
 HF_USERNAME = os.environ.get("HF_USERNAME", "")
 BACKUP_DATASET = os.environ.get("BACKUP_DATASET_NAME", "huggingclaw-backup")
@@ -179,24 +180,25 @@ def sync_with_git():
 
 
 def main():
-    # Wait for workspace to initialize
-    time.sleep(30)
-
     if not WORKSPACE.exists():
         print("📁 Workspace sync: workspace not found, exiting.")
         return
 
     use_hf_hub = bool(HF_TOKEN and HF_USERNAME)
+    git_dir = WORKSPACE / ".git"
+
+    if not use_hf_hub and not git_dir.exists():
+        print("📁 Workspace sync: no git repo and no HF credentials, skipping.")
+        return
+
+    # Give the gateway a short head start before the first sync probe.
+    time.sleep(INITIAL_DELAY)
 
     snapshot_state_into_workspace()
 
     if use_hf_hub:
         print(f"🔄 Workspace sync started (huggingface_hub): every {INTERVAL}s → {HF_USERNAME}/{BACKUP_DATASET}")
     else:
-        git_dir = WORKSPACE / ".git"
-        if not git_dir.exists():
-            print("📁 Workspace sync: no git repo and no HF credentials, skipping.")
-            return
         print(f"🔄 Workspace sync started (git): every {INTERVAL}s")
 
     while running:
