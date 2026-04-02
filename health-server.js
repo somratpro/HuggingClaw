@@ -2,24 +2,15 @@
 const http = require("http");
 const fs = require("fs");
 const net = require("net");
-const { randomUUID } = require("node:crypto");
 
 const PORT = 7861;
 const GATEWAY_PORT = 7860;
 const GATEWAY_HOST = "127.0.0.1";
 const startTime = Date.now();
 const LLM_MODEL = process.env.LLM_MODEL || "Not Set";
-const GATEWAY_TOKEN = process.env.GATEWAY_TOKEN || "";
 const TELEGRAM_ENABLED = !!process.env.TELEGRAM_BOT_TOKEN;
-const GATEWAY_STATUS_CACHE_MS = 5000;
-
-let gatewayStatusCache = {
-  expiresAt: 0,
-  value: {
-    whatsapp: { configured: true, connected: false },
-    telegram: { configured: TELEGRAM_ENABLED, connected: false },
-  },
-};
+const WHATSAPP_ENABLED = /^true$/i.test(process.env.WHATSAPP_ENABLED || "");
+const WHATSAPP_STATUS_FILE = "/tmp/huggingclaw-wa-status.json";
 
 function parseRequestUrl(url) {
   try {
@@ -74,117 +65,21 @@ function normalizeChannelStatus(channel, configured) {
   };
 }
 
-function extractErrorMessage(msg) {
-  if (!msg || typeof msg !== "object") return "Unknown error";
-  if (typeof msg.error === "string") return msg.error;
-  if (msg.error && typeof msg.error.message === "string") return msg.error.message;
-  if (typeof msg.message === "string") return msg.message;
-  return "Unknown error";
-}
-
-function createGatewayConnection() {
-  return new Promise((resolve, reject) => {
-    const { WebSocket } = require("/home/node/.openclaw/openclaw-app/node_modules/ws");
-    const ws = new WebSocket(`ws://${GATEWAY_HOST}:${GATEWAY_PORT}`);
-    let resolved = false;
-
-    ws.on("message", (data) => {
-      const msg = JSON.parse(data.toString());
-
-      if (msg.type === "event" && msg.event === "connect.challenge") {
-        ws.send(JSON.stringify({
-          type: "req",
-          id: randomUUID(),
-          method: "connect",
-          params: {
-            minProtocol: 3,
-            maxProtocol: 3,
-            client: {
-              id: "health-server",
-              version: "1.0.0",
-              platform: "linux",
-              mode: "backend",
-            },
-            caps: [],
-            auth: { token: GATEWAY_TOKEN },
-            role: "operator",
-            scopes: ["operator.read"],
-          },
-        }));
-        return;
-      }
-
-      if (!resolved && msg.type === "res" && msg.ok === false) {
-        resolved = true;
-        ws.close();
-        reject(new Error(extractErrorMessage(msg)));
-        return;
-      }
-
-      if (!resolved && msg.type === "res" && msg.ok) {
-        resolved = true;
-        resolve(ws);
-      }
-    });
-
-    ws.on("error", (error) => {
-      if (!resolved) reject(error);
-    });
-
-    setTimeout(() => {
-      if (!resolved) {
-        ws.close();
-        reject(new Error("Timeout"));
-      }
-    }, 10000);
-  });
-}
-
-function callGatewayRpc(ws, method, params) {
-  return new Promise((resolve, reject) => {
-    const id = randomUUID();
-    const handler = (data) => {
-      const msg = JSON.parse(data.toString());
-      if (msg.id === id) {
-        ws.removeListener("message", handler);
-        resolve(msg);
-      }
-    };
-
-    ws.on("message", handler);
-    ws.send(JSON.stringify({ type: "req", id, method, params }));
-
-    setTimeout(() => {
-      ws.removeListener("message", handler);
-      reject(new Error("RPC Timeout"));
-    }, 15000);
-  });
-}
-
-async function getGatewayChannelStatus() {
-  if (Date.now() < gatewayStatusCache.expiresAt) {
-    return gatewayStatusCache.value;
+function readGuardianStatus() {
+  if (!WHATSAPP_ENABLED) {
+    return { configured: false, connected: false, pairing: false };
   }
-
-  let ws;
   try {
-    ws = await createGatewayConnection();
-    const statusRes = await callGatewayRpc(ws, "channels.status", {});
-    const channels = (statusRes.payload || statusRes.result)?.channels || {};
-    const value = {
-      whatsapp: normalizeChannelStatus(channels.whatsapp, true),
-      telegram: normalizeChannelStatus(channels.telegram, TELEGRAM_ENABLED),
-    };
-    gatewayStatusCache = {
-      expiresAt: Date.now() + GATEWAY_STATUS_CACHE_MS,
-      value,
-    };
-    return value;
-  } catch {
-    return gatewayStatusCache.value;
-  } finally {
-    if (ws) ws.close();
-  }
+    if (fs.existsSync(WHATSAPP_STATUS_FILE)) {
+      const parsed = JSON.parse(fs.readFileSync(WHATSAPP_STATUS_FILE, "utf8"));
+      return {
+        configured: parsed.configured !== false,
+        connected: parsed.connected === true,
+        pairing: parsed.pairing === true,
+      };
+    }
+  } catch {}
+  return { configured: true, connected: false, pairing: false };
 }
 
 function renderDashboard() {
@@ -570,13 +465,17 @@ const server = http.createServer((req, res) => {
 
   if (pathname === "/status") {
     void (async () => {
-      const channelStatus = await getGatewayChannelStatus();
+      const guardianStatus = readGuardianStatus();
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(
         JSON.stringify({
           model: LLM_MODEL,
-          whatsapp: channelStatus.whatsapp,
-          telegram: channelStatus.telegram,
+          whatsapp: {
+            configured: guardianStatus.configured,
+            connected: guardianStatus.connected,
+            pairing: guardianStatus.pairing,
+          },
+          telegram: normalizeChannelStatus(null, TELEGRAM_ENABLED),
           sync: readSyncStatus(),
           uptime: uptimeHuman,
         }),

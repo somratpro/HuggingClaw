@@ -14,6 +14,7 @@ const { randomUUID } = require('node:crypto');
 
 const GATEWAY_URL = "ws://127.0.0.1:7860";
 const GATEWAY_TOKEN = process.env.GATEWAY_TOKEN || "huggingclaw";
+const WHATSAPP_ENABLED = /^true$/i.test(process.env.WHATSAPP_ENABLED || "");
 const CHECK_INTERVAL = 5000;
 const WAIT_TIMEOUT = 120000;
 const POST_515_NO_LOGOUT_MS = 90 * 1000;
@@ -24,6 +25,7 @@ const RESET_MARKER_PATH = path.join(
   "workspace",
   ".reset_credentials",
 );
+const STATUS_FILE_PATH = "/tmp/huggingclaw-wa-status.json";
 
 let isWaiting = false;
 let hasShownWaitMessage = false;
@@ -46,6 +48,25 @@ function writeResetMarker() {
     console.log(`[guardian] Created backup reset marker at ${RESET_MARKER_PATH}`);
   } catch (error) {
     console.log(`[guardian] Failed to write backup reset marker: ${error.message}`);
+  }
+}
+
+function writeStatus(partial) {
+  try {
+    const current = fs.existsSync(STATUS_FILE_PATH)
+      ? JSON.parse(fs.readFileSync(STATUS_FILE_PATH, "utf8"))
+      : {};
+    const next = {
+      configured: true,
+      connected: false,
+      pairing: false,
+      updatedAt: new Date().toISOString(),
+      ...current,
+      ...partial,
+    };
+    fs.writeFileSync(STATUS_FILE_PATH, JSON.stringify(next));
+  } catch (error) {
+    console.log(`[guardian] Failed to write status file: ${error.message}`);
   }
 }
 
@@ -133,16 +154,21 @@ async function checkStatus() {
 
     if (!wa) {
       hasShownWaitMessage = false;
+      writeStatus({ configured: true, connected: false, pairing: false });
       return;
     }
 
     if (wa.connected) {
       hasShownWaitMessage = false;
       lastConnectedAt = Date.now();
+      writeStatus({ configured: true, connected: true, pairing: false });
+      shouldStop = true;
+      setTimeout(() => process.exit(0), 1000);
       return;
     }
 
     isWaiting = true;
+    writeStatus({ configured: true, connected: false, pairing: true });
     if (!hasShownWaitMessage) {
       console.log("\n[guardian] 📱 WhatsApp pairing in progress. Please scan the QR code in the Control UI.");
       hasShownWaitMessage = true;
@@ -161,6 +187,7 @@ async function checkStatus() {
     if (result && (result.connected || linkedAfter515)) {
       hasShownWaitMessage = false;
       lastConnectedAt = Date.now();
+      writeStatus({ configured: true, connected: true, pairing: false });
 
       if (linkedAfter515) {
         console.log("[guardian] 515 after scan: credentials saved, reloading config to start WhatsApp...");
@@ -198,6 +225,9 @@ async function checkStatus() {
         console.log(`[guardian] Failed to log out invalid session: ${error.message}`);
       }
     }
+    if (!/RPC Timeout/i.test(message)) {
+      writeStatus({ configured: true, connected: false, pairing: false });
+    }
     // Normal timeout or gateway starting up; retry on the next interval.
   } finally {
     isWaiting = false;
@@ -205,6 +235,12 @@ async function checkStatus() {
   }
 }
 
+if (!WHATSAPP_ENABLED) {
+  writeStatus({ configured: false, connected: false, pairing: false });
+  process.exit(0);
+}
+
+writeStatus({ configured: true, connected: false, pairing: false });
 console.log("[guardian] ⚔️ WhatsApp Guardian active. Monitoring pairing status...");
 setInterval(checkStatus, CHECK_INTERVAL);
 setTimeout(checkStatus, 15000);

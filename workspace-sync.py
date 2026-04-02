@@ -26,6 +26,7 @@ HF_TOKEN = os.environ.get("HF_TOKEN", "")
 HF_USERNAME = os.environ.get("HF_USERNAME", "")
 BACKUP_DATASET = os.environ.get("BACKUP_DATASET_NAME", "huggingclaw-backup")
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "")
+WHATSAPP_ENABLED = os.environ.get("WHATSAPP_ENABLED", "").strip().lower() == "true"
 
 running = True
 
@@ -52,6 +53,9 @@ def snapshot_state_into_workspace() -> None:
     with the workspace, without changing the live credentials location.
     """
     try:
+        if not WHATSAPP_ENABLED:
+            return
+
         STATE_DIR.mkdir(parents=True, exist_ok=True)
 
         if RESET_MARKER.exists():

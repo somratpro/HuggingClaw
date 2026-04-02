@@ -98,10 +98,9 @@ After restarting, the bot should appear online on Telegram.
 
 To use WhatsApp:
 
-1. Visit your Space URL. It opens the dashboard at `/dashboard` by default, then click **Open Control UI**.
-2. Enter your `GATEWAY_TOKEN` when the Control UI prompts you to log in.
-3. In the Control UI, go to **Channels** → **WhatsApp** → **Login**.
-4. Scan the QR code with your phone. 📱
+1. Add `WHATSAPP_ENABLED=true` in Hugging Face Space Variables or Secrets.
+2. In the Control UI, go to **Channels** → **WhatsApp** → **Login**.
+3. Scan the QR code with your phone. 📱
 
 ## 💾 Workspace Backup *(Optional)*
 
@@ -138,6 +137,15 @@ See `.env.example` for runtime settings. Key configuration values:
 | `LLM_API_KEY`   | LLM provider API key (e.g. OpenAI, Anthropic, etc.)         |
 | `LLM_MODEL`     | Model ID (prefix `<provider>/`, auto-detected from prefix)  |
 | `GATEWAY_TOKEN` | Gateway token for Control UI access (required)              |
+
+### Chat Integrations
+
+| Variable              | Default | Description                                        |
+|-----------------------|---------|----------------------------------------------------|
+| `WHATSAPP_ENABLED`    | `false` | Enable WhatsApp pairing/login support              |
+| `TELEGRAM_BOT_TOKEN`  | —       | Telegram bot token from BotFather                  |
+| `TELEGRAM_USER_ID`    | —       | Single Telegram user ID allowlist                  |
+| `TELEGRAM_USER_IDS`   | —       | Comma-separated Telegram user IDs for team access  |
 
 ### Background Services
 

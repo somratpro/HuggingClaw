@@ -7,6 +7,8 @@ set -e
 
 # ── Startup Banner ──
 OPENCLAW_VERSION="${OPENCLAW_VERSION:-latest}"
+WHATSAPP_ENABLED="${WHATSAPP_ENABLED:-false}"
+WHATSAPP_ENABLED_NORMALIZED=$(printf '%s' "$WHATSAPP_ENABLED" | tr '[:upper:]' '[:lower:]')
 echo ""
 echo "  ╔══════════════════════════════════════════╗"
 echo "  ║          🦞 HuggingClaw Gateway          ║"
@@ -166,7 +168,7 @@ fi
 # ── Restore persisted WhatsApp credentials (if present) ──
 WA_BACKUP_DIR="/home/node/.openclaw/workspace/.huggingclaw-state/credentials/whatsapp/default"
 WA_CREDS_DIR="/home/node/.openclaw/credentials/whatsapp/default"
-if [ -d "$WA_BACKUP_DIR" ]; then
+if [ "$WHATSAPP_ENABLED_NORMALIZED" = "true" ] && [ -d "$WA_BACKUP_DIR" ]; then
   WA_FILE_COUNT=$(find "$WA_BACKUP_DIR" -type f | wc -l | tr -d ' ')
   if [ "$WA_FILE_COUNT" -ge 2 ]; then
     echo "📱 Restoring WhatsApp credentials..."
@@ -252,9 +254,11 @@ if [ -n "$TELEGRAM_BOT_TOKEN" ]; then
   fi
 fi
 
-# WhatsApp
-CONFIG_JSON=$(echo "$CONFIG_JSON" | jq '.plugins.entries.whatsapp = {"enabled": true}')
-CONFIG_JSON=$(echo "$CONFIG_JSON" | jq '.channels.whatsapp = {"dmPolicy": "pairing"}')
+# WhatsApp (optional)
+if [ "$WHATSAPP_ENABLED_NORMALIZED" = "true" ]; then
+  CONFIG_JSON=$(echo "$CONFIG_JSON" | jq '.plugins.entries.whatsapp = {"enabled": true}')
+  CONFIG_JSON=$(echo "$CONFIG_JSON" | jq '.channels.whatsapp = {"dmPolicy": "pairing"}')
+fi
 
 # Write config
 echo "$CONFIG_JSON" > "/home/node/.openclaw/openclaw.json"
@@ -311,7 +315,11 @@ printf "  │  %-40s │\n" "Telegram: ✅ enabled"
 else
 printf "  │  %-40s │\n" "Telegram: ❌ not configured"
 fi
+if [ "$WHATSAPP_ENABLED_NORMALIZED" = "true" ]; then
 printf "  │  %-40s │\n" "WhatsApp: ✅ enabled"
+else
+printf "  │  %-40s │\n" "WhatsApp: ❌ disabled"
+fi
 if [ -n "$HF_USERNAME" ] && [ -n "$HF_TOKEN" ]; then
 printf "  │  %-40s │\n" "Backup: ✅ ${HF_USERNAME}/${BACKUP_DATASET:-huggingclaw-backup}"
 else
@@ -408,9 +416,11 @@ if ! kill -0 $GATEWAY_PID 2>/dev/null; then
 fi
 
 # 12. Start WhatsApp Guardian after the gateway is accepting connections
-node /home/node/app/wa-guardian.js &
-GUARDIAN_PID=$!
-echo "🛡️ WhatsApp Guardian started (PID: $GUARDIAN_PID)"
+if [ "$WHATSAPP_ENABLED_NORMALIZED" = "true" ]; then
+  node /home/node/app/wa-guardian.js &
+  GUARDIAN_PID=$!
+  echo "🛡️ WhatsApp Guardian started (PID: $GUARDIAN_PID)"
+fi
 
 # 13. Start Workspace Sync after startup settles
 python3 -u /home/node/app/workspace-sync.py &
