@@ -176,7 +176,7 @@ CONFIG_JSON=$(cat <<'CONFIGEOF'
     "controlUi": {
       "allowInsecureAuth": true
     },
-    "trustedProxies": ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
+    "trustedProxies": ["127.0.0.1/8", "::1/128", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
   },
   "channels": {},
   "plugins": {
@@ -206,10 +206,11 @@ if [ -n "$OPENCLAW_PASSWORD" ]; then
 fi
 
 # Trusted proxies (optional — fixes "Proxy headers detected from untrusted address" on HF Spaces)
-# Set TRUSTED_PROXIES as comma-separated IPs, e.g. "10.20.31.87,10.20.26.157"
+# Set TRUSTED_PROXIES as comma-separated IPs/CIDRs, e.g. "10.20.31.87,10.20.26.157"
+# Loopback proxies stay trusted by default so the local dashboard reverse proxy works correctly.
 if [ -n "$TRUSTED_PROXIES" ]; then
   PROXIES_JSON=$(echo "$TRUSTED_PROXIES" | tr ',' '\n' | sed 's/^ *//;s/ *$//' | jq -R . | jq -s .)
-  CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".gateway.trustedProxies = $PROXIES_JSON")
+  CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".gateway.trustedProxies += $PROXIES_JSON | .gateway.trustedProxies |= unique")
 fi
 
 # Allowed origins (optional — lock down Control UI to specific URLs)

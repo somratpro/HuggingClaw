@@ -14,9 +14,20 @@ const GATEWAY_URL = "ws://127.0.0.1:7860";
 const GATEWAY_TOKEN = process.env.GATEWAY_TOKEN || "huggingclaw";
 const CHECK_INTERVAL = 5000;
 const WAIT_TIMEOUT = 120000;
+const AUTH_FAILURE_COOLDOWN = 5 * 60 * 1000;
 
 let isWaiting = false;
 let hasShownWaitMessage = false;
+let authFailureUntil = 0;
+let authFailureLogged = false;
+
+function extractErrorMessage(msg) {
+  if (!msg || typeof msg !== "object") return "Unknown error";
+  if (typeof msg.error === "string") return msg.error;
+  if (msg.error && typeof msg.error.message === "string") return msg.error.message;
+  if (typeof msg.message === "string") return msg.message;
+  return "Unknown error";
+}
 
 async function createConnection() {
   return new Promise((resolve, reject) => {
@@ -37,6 +48,13 @@ async function createConnection() {
             scopes: ["operator.admin", "operator.pairing", "operator.read", "operator.write"]
           }
         }));
+        return;
+      }
+
+      if (!resolved && msg.type === "res" && msg.ok === false) {
+        resolved = true;
+        ws.close();
+        reject(new Error(extractErrorMessage(msg)));
         return;
       }
 
@@ -69,10 +87,13 @@ async function callRpc(ws, method, params) {
 
 async function checkStatus() {
   if (isWaiting) return;
+  if (Date.now() < authFailureUntil) return;
 
   let ws;
   try {
     ws = await createConnection();
+    authFailureUntil = 0;
+    authFailureLogged = false;
 
     // Check if WhatsApp channel exists and its status
     const statusRes = await callRpc(ws, "channels.status", {});
@@ -114,6 +135,14 @@ async function checkStatus() {
     }
 
   } catch (e) {
+    const message = e && e.message ? e.message : "";
+    if (/unauthorized|authentication|too many failed/i.test(message)) {
+      authFailureUntil = Date.now() + AUTH_FAILURE_COOLDOWN;
+      if (!authFailureLogged) {
+        console.log(`[guardian] Authentication failed (${message}). Pausing guardian retries for ${AUTH_FAILURE_COOLDOWN / 60000} minutes.`);
+        authFailureLogged = true;
+      }
+    }
     // Normal timeout or gateway starting up
   } finally {
     isWaiting = false;

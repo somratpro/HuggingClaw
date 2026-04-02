@@ -2,19 +2,30 @@
 const http = require("http");
 const fs = require("fs");
 const net = require("net");
+const { randomUUID } = require("node:crypto");
 
 const PORT = 7861;
 const GATEWAY_PORT = 7860;
 const GATEWAY_HOST = "127.0.0.1";
 const startTime = Date.now();
 const LLM_MODEL = process.env.LLM_MODEL || "Not Set";
+const GATEWAY_TOKEN = process.env.GATEWAY_TOKEN || "";
 const TELEGRAM_ENABLED = !!process.env.TELEGRAM_BOT_TOKEN;
+const GATEWAY_STATUS_CACHE_MS = 5000;
 
-function getPathname(url) {
+let gatewayStatusCache = {
+  expiresAt: 0,
+  value: {
+    whatsapp: { configured: true, connected: false },
+    telegram: { configured: TELEGRAM_ENABLED, connected: false },
+  },
+};
+
+function parseRequestUrl(url) {
   try {
-    return new URL(url, "http://localhost").pathname;
+    return new URL(url, "http://localhost");
   } catch {
-    return "/";
+    return new URL("http://localhost/");
   }
 }
 
@@ -22,11 +33,16 @@ function isDashboardRoute(pathname) {
   return pathname === "/dashboard" || pathname === "/dashboard/";
 }
 
+function isControlRoute(pathname) {
+  return pathname === "/control" || pathname === "/control/";
+}
+
 function isLocalRoute(pathname) {
   return (
     pathname === "/health" ||
     pathname === "/status" ||
-    isDashboardRoute(pathname)
+    isDashboardRoute(pathname) ||
+    isControlRoute(pathname)
   );
 }
 
@@ -58,6 +74,117 @@ function readSyncStatus() {
     }
   } catch {}
   return { status: "unknown", message: "No sync data yet" };
+}
+
+function normalizeChannelStatus(channel, configured) {
+  return {
+    configured: configured || !!channel,
+    connected: !!(channel && channel.connected),
+  };
+}
+
+function extractErrorMessage(msg) {
+  if (!msg || typeof msg !== "object") return "Unknown error";
+  if (typeof msg.error === "string") return msg.error;
+  if (msg.error && typeof msg.error.message === "string") return msg.error.message;
+  if (typeof msg.message === "string") return msg.message;
+  return "Unknown error";
+}
+
+function createGatewayConnection() {
+  return new Promise((resolve, reject) => {
+    const { WebSocket } = require("/home/node/.openclaw/openclaw-app/node_modules/ws");
+    const ws = new WebSocket(`ws://${GATEWAY_HOST}:${GATEWAY_PORT}`);
+    let resolved = false;
+
+    ws.on("message", (data) => {
+      const msg = JSON.parse(data.toString());
+
+      if (msg.type === "event" && msg.event === "connect.challenge") {
+        ws.send(JSON.stringify({
+          type: "req",
+          id: randomUUID(),
+          method: "connect",
+          params: {
+            auth: { token: GATEWAY_TOKEN },
+            client: { id: "health-server", platform: "linux", mode: "backend", version: "1.0.0" },
+            scopes: ["operator.read"],
+          },
+        }));
+        return;
+      }
+
+      if (!resolved && msg.type === "res" && msg.ok === false) {
+        resolved = true;
+        ws.close();
+        reject(new Error(extractErrorMessage(msg)));
+        return;
+      }
+
+      if (!resolved && msg.type === "res" && msg.ok) {
+        resolved = true;
+        resolve(ws);
+      }
+    });
+
+    ws.on("error", (error) => {
+      if (!resolved) reject(error);
+    });
+
+    setTimeout(() => {
+      if (!resolved) {
+        ws.close();
+        reject(new Error("Timeout"));
+      }
+    }, 10000);
+  });
+}
+
+function callGatewayRpc(ws, method, params) {
+  return new Promise((resolve, reject) => {
+    const id = randomUUID();
+    const handler = (data) => {
+      const msg = JSON.parse(data.toString());
+      if (msg.id === id) {
+        ws.removeListener("message", handler);
+        resolve(msg);
+      }
+    };
+
+    ws.on("message", handler);
+    ws.send(JSON.stringify({ type: "req", id, method, params }));
+
+    setTimeout(() => {
+      ws.removeListener("message", handler);
+      reject(new Error("RPC Timeout"));
+    }, 15000);
+  });
+}
+
+async function getGatewayChannelStatus() {
+  if (Date.now() < gatewayStatusCache.expiresAt) {
+    return gatewayStatusCache.value;
+  }
+
+  let ws;
+  try {
+    ws = await createGatewayConnection();
+    const statusRes = await callGatewayRpc(ws, "channels.status", {});
+    const channels = (statusRes.payload || statusRes.result)?.channels || {};
+    const value = {
+      whatsapp: normalizeChannelStatus(channels.whatsapp, true),
+      telegram: normalizeChannelStatus(channels.telegram, TELEGRAM_ENABLED),
+    };
+    gatewayStatusCache = {
+      expiresAt: Date.now() + GATEWAY_STATUS_CACHE_MS,
+      value,
+    };
+    return value;
+  } catch {
+    return gatewayStatusCache.value;
+  } finally {
+    if (ws) ws.close();
+  }
 }
 
 function renderDashboard() {
@@ -260,7 +387,7 @@ function renderDashboard() {
                 <span class="stat-label">Telegram</span>
                 <span id="tg-status">Loading...</span>
             </div>
-            <a href="/" class="stat-btn">Open Control UI</a>
+            <a href="/control" class="stat-btn">Open Control UI</a>
         </div>
 
         <div class="stat-card" style="width: 100%;">
@@ -286,13 +413,18 @@ function renderDashboard() {
                 document.getElementById('model-id').textContent = data.model;
                 document.getElementById('uptime').textContent = data.uptime;
 
-                document.getElementById('wa-status').innerHTML = data.whatsapp
-                    ? '<div class="status-badge status-online"><div class="pulse"></div>Active</div>'
-                    : '<div class="status-badge status-offline">Disabled</div>';
+                function renderChannelStatus(channel, configuredLabel) {
+                    if (channel && channel.connected) {
+                        return '<div class="status-badge status-online"><div class="pulse"></div>Active</div>';
+                    }
+                    if (channel && channel.configured) {
+                        return '<div class="status-badge status-syncing">' + configuredLabel + '</div>';
+                    }
+                    return '<div class="status-badge status-offline">Disabled</div>';
+                }
 
-                document.getElementById('tg-status').innerHTML = data.telegram
-                    ? '<div class="status-badge status-online"><div class="pulse"></div>Active</div>'
-                    : '<div class="status-badge status-offline">Disabled</div>';
+                document.getElementById('wa-status').innerHTML = renderChannelStatus(data.whatsapp, 'Ready to pair');
+                document.getElementById('tg-status').innerHTML = renderChannelStatus(data.telegram, 'Configured');
 
                 const syncData = data.sync;
                 let badgeClass = 'status-offline';
@@ -418,7 +550,8 @@ function proxyUpgrade(req, socket, head) {
 }
 
 const server = http.createServer((req, res) => {
-  const pathname = getPathname(req.url || "/");
+  const parsedUrl = parseRequestUrl(req.url || "/");
+  const pathname = parsedUrl.pathname;
   const uptime = Math.floor((Date.now() - startTime) / 1000);
   const uptimeHuman = `${Math.floor(uptime / 3600)}h ${Math.floor((uptime % 3600) / 60)}m`;
 
@@ -436,16 +569,19 @@ const server = http.createServer((req, res) => {
   }
 
   if (pathname === "/status") {
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(
-      JSON.stringify({
-        model: LLM_MODEL,
-        whatsapp: true,
-        telegram: TELEGRAM_ENABLED,
-        sync: readSyncStatus(),
-        uptime: uptimeHuman,
-      }),
-    );
+    void (async () => {
+      const channelStatus = await getGatewayChannelStatus();
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify({
+          model: LLM_MODEL,
+          whatsapp: channelStatus.whatsapp,
+          telegram: channelStatus.telegram,
+          sync: readSyncStatus(),
+          uptime: uptimeHuman,
+        }),
+      );
+    })();
     return;
   }
 
@@ -455,11 +591,20 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if ((pathname === "/" || isControlRoute(pathname)) && req.method === "GET" && !parsedUrl.searchParams.get("token") && GATEWAY_TOKEN) {
+    res.writeHead(302, {
+      Location: `/?token=${encodeURIComponent(GATEWAY_TOKEN)}`,
+      "Cache-Control": "no-store",
+    });
+    res.end();
+    return;
+  }
+
   proxyHttp(req, res);
 });
 
 server.on("upgrade", (req, socket, head) => {
-  const pathname = getPathname(req.url || "/");
+  const pathname = parseRequestUrl(req.url || "/").pathname;
   if (isLocalRoute(pathname)) {
     socket.destroy();
     return;
