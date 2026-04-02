@@ -7,6 +7,7 @@ const { randomUUID } = require("node:crypto");
 const PORT = 7861;
 const GATEWAY_PORT = 7860;
 const GATEWAY_HOST = "127.0.0.1";
+const GATEWAY_ORIGIN = `http://${GATEWAY_HOST}:${GATEWAY_PORT}`;
 const startTime = Date.now();
 const LLM_MODEL = process.env.LLM_MODEL || "Not Set";
 const GATEWAY_TOKEN = process.env.GATEWAY_TOKEN || "";
@@ -85,7 +86,12 @@ function extractErrorMessage(msg) {
 function createGatewayConnection() {
   return new Promise((resolve, reject) => {
     const { WebSocket } = require("/home/node/.openclaw/openclaw-app/node_modules/ws");
-    const ws = new WebSocket(`ws://${GATEWAY_HOST}:${GATEWAY_PORT}`);
+    const ws = new WebSocket(
+      `ws://${GATEWAY_HOST}:${GATEWAY_PORT}/?token=${encodeURIComponent(GATEWAY_TOKEN)}`,
+      {
+        headers: { Origin: GATEWAY_ORIGIN },
+      },
+    );
     let resolved = false;
 
     ws.on("message", (data) => {
@@ -100,14 +106,8 @@ function createGatewayConnection() {
             minProtocol: 3,
             maxProtocol: 3,
             auth: { token: GATEWAY_TOKEN },
-            client: { id: "health-server", platform: "linux", mode: "backend", version: "1.0.0" },
-            role: "operator",
+            client: { id: "huggingclaw-dashboard", platform: "web", mode: "ui", version: "1.0.0" },
             scopes: ["operator.read"],
-            caps: [],
-            commands: [],
-            permissions: {},
-            locale: "en-US",
-            userAgent: "huggingclaw-health-server/1.0.0",
           },
         }));
         return;

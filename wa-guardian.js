@@ -12,7 +12,8 @@ const path = require("path");
 const { WebSocket } = require('/home/node/.openclaw/openclaw-app/node_modules/ws');
 const { randomUUID } = require('node:crypto');
 
-const GATEWAY_URL = "ws://127.0.0.1:7860";
+const GATEWAY_WS_URL = "ws://127.0.0.1:7860";
+const GATEWAY_ORIGIN = "http://127.0.0.1:7860";
 const GATEWAY_TOKEN = process.env.GATEWAY_TOKEN || "huggingclaw";
 const CHECK_INTERVAL = 5000;
 const WAIT_TIMEOUT = 120000;
@@ -51,7 +52,12 @@ function writeResetMarker() {
 
 async function createConnection() {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(GATEWAY_URL);
+    const ws = new WebSocket(
+      `${GATEWAY_WS_URL}/?token=${encodeURIComponent(GATEWAY_TOKEN)}`,
+      {
+        headers: { Origin: GATEWAY_ORIGIN },
+      },
+    );
     let resolved = false;
 
     ws.on("message", (data) => {
@@ -66,14 +72,8 @@ async function createConnection() {
             minProtocol: 3,
             maxProtocol: 3,
             auth: { token: GATEWAY_TOKEN },
-            client: { id: "wa-guardian", platform: "linux", mode: "backend", version: "1.0.0" },
-            role: "operator",
+            client: { id: "huggingclaw-wa-guardian", platform: "web", mode: "ui", version: "1.0.0" },
             scopes: ["operator.admin", "operator.pairing", "operator.read", "operator.write"],
-            caps: [],
-            commands: [],
-            permissions: {},
-            locale: "en-US",
-            userAgent: "huggingclaw-wa-guardian/1.0.0",
           }
         }));
         return;
