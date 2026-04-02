@@ -353,9 +353,13 @@ KEEP_ALIVE_PID=$!
 echo "🚀 Launching OpenClaw gateway on port 7860..."
 echo ""
 
+GATEWAY_ARGS=(gateway run --port 7860 --bind lan)
+if [ "${GATEWAY_VERBOSE:-0}" = "1" ]; then
+  GATEWAY_ARGS+=(--verbose)
+  echo "🔎 Gateway verbose logging enabled (GATEWAY_VERBOSE=1)"
+fi
 
-
-openclaw gateway run --port 7860 --bind lan --verbose 2>&1 | tee -a /home/node/.openclaw/gateway.log &
+openclaw "${GATEWAY_ARGS[@]}" 2>&1 | tee -a /home/node/.openclaw/gateway.log &
 GATEWAY_PID=$!
 
 # Wait a moment for startup errors
