@@ -127,6 +127,28 @@ For persistent chat history and configuration, HuggingClaw can sync your workspa
 > [!TIP]
 > This backup also stores a hidden copy of your WhatsApp session credentials, allowing paired logins to survive Space restarts automatically.
 
+## ⏰ External Keep-Alive *(Recommended on Free HF Spaces)*
+
+Free Hugging Face Spaces can still sleep. To keep your Space awake, set up an external UptimeRobot monitor from the dashboard.
+
+Use the **Main API key** from UptimeRobot.
+Do **not** use the `Read-only API key` or a `Monitor-specific API key`.
+
+Setup:
+
+1. Open `/dashboard`.
+2. Find **Keep Space Awake**.
+3. Paste your UptimeRobot **Main API key**.
+4. Click **Create Monitor**.
+
+What happens next:
+
+- HuggingClaw creates a monitor for `https://your-space.hf.space/health`
+- UptimeRobot keeps pinging it from outside Hugging Face
+- You only need to do this once
+
+You do **not** need to add this key to Hugging Face Space Secrets.
+
 ## 🔔 Webhooks *(Optional)*
 
 Get notified when your Space restarts or if a backup fails:
