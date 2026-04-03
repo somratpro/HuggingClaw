@@ -332,8 +332,8 @@ else
 printf "  │  %-40s │\n" "Auth: 🔐 token"
 fi
 if [ -n "$SPACE_HOST" ]; then
-printf "  │  %-40s │\n" "Control UI: https://${SPACE_HOST}"
-printf "  │  %-40s │\n" "Dashboard: https://${SPACE_HOST}/dashboard"
+printf "  │  %-40s │\n" "Control UI: https://${SPACE_HOST}/app"
+printf "  │  %-40s │\n" "Dashboard: https://${SPACE_HOST}"
 fi
 SYNC_STATUS="❌ disabled"
 if [ -n "$HF_USERNAME" ] && [ -n "$HF_TOKEN" ]; then

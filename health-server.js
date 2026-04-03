@@ -31,7 +31,7 @@ function parseRequestUrl(url) {
 }
 
 function isDashboardRoute(pathname) {
-  return pathname === DASHBOARD_BASE || pathname === `${DASHBOARD_BASE}/`;
+  return pathname === "/" || pathname === DASHBOARD_BASE || pathname === `${DASHBOARD_BASE}/`;
 }
 
 function isDashboardScopedPath(pathname, suffix) {
@@ -577,13 +577,19 @@ function renderDashboard(initialData) {
 
     <script>
         function getDashboardBase() {
-            const pathname = window.location.pathname || '${DASHBOARD_BASE}';
+            const pathname = window.location.pathname || '/';
+            if (pathname === '/' || pathname === '') return '';
+            if (pathname === '${DASHBOARD_BASE}' || pathname === '${DASHBOARD_BASE}/') return '${DASHBOARD_BASE}';
             return pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
+        }
+
+        function getCurrentSearch() {
+            return window.location.search || '';
         }
 
         async function updateStats() {
             try {
-                const res = await fetch(getDashboardBase() + '/status');
+                const res = await fetch(getDashboardBase() + '/status' + getCurrentSearch());
                 const data = await res.json();
 
                 document.getElementById('model-id').textContent = data.model;
@@ -673,7 +679,7 @@ function renderDashboard(initialData) {
             result.textContent = '';
 
             try {
-                const res = await fetch(getDashboardBase() + '/uptimerobot/setup', {
+                const res = await fetch(getDashboardBase() + '/uptimerobot/setup' + getCurrentSearch(), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ apiKey })
@@ -704,7 +710,7 @@ function renderDashboard(initialData) {
         updateStats();
         setInterval(updateStats, 10000);
         restoreMonitorUiState();
-        document.getElementById('control-ui-link').setAttribute('href', getDashboardBase() + '/app/');
+        document.getElementById('control-ui-link').setAttribute('href', getDashboardBase() + '/app/' + getCurrentSearch());
         document.getElementById('uptimerobot-btn').addEventListener('click', setupUptimeRobot);
         document.getElementById('uptimerobot-toggle').addEventListener('click', toggleMonitorSetup);
     </script>

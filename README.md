@@ -5,7 +5,6 @@ colorFrom: blue
 colorTo: purple
 sdk: docker
 app_port: 7861
-base_path: /dashboard
 pinned: true
 license: mit
 ---
@@ -82,7 +81,7 @@ That's it! The Space will build the container and start up automatically. You ca
 
 ### Step 4: Monitor & Manage
 
-HuggingClaw features a built-in dashboard at `/dashboard` (served from the same URL as the Control UI) to track:
+HuggingClaw features a built-in dashboard at `/` (with `/dashboard` kept as an alias) to track:
 
 - **Uptime:** Real-time uptime monitoring.
 - **Sync Status:** Visual indicators for workspace backup operations.
@@ -136,7 +135,7 @@ Do **not** use the `Read-only API key` or a `Monitor-specific API key`.
 
 Setup:
 
-1. Open `/dashboard`.
+1. Open `/`.
 2. Find **Keep Space Awake**.
 3. Paste your UptimeRobot **Main API key**.
 4. Click **Create Monitor**.
@@ -277,7 +276,7 @@ HuggingClaw/
 - **Missing secrets:** Ensure `LLM_API_KEY`, `LLM_MODEL`, and `GATEWAY_TOKEN` are set in your Space **Settings → Secrets**.
 - **Telegram bot issues:** Verify your `TELEGRAM_BOT_TOKEN`. Check Space logs for lines like `📱 Enabling Telegram`.
 - **Backup restore failing:** Make sure `HF_USERNAME` and `HF_TOKEN` are correct (token needs write access to your Dataset).
-- **Space keeps sleeping:** Open `/dashboard` and use `Keep Space Awake` to create the external monitor.
+- **Space keeps sleeping:** Open `/` and use `Keep Space Awake` to create the external monitor.
 - **Auth errors / proxy:** If you see reverse-proxy auth errors, add the logged IPs under `TRUSTED_PROXIES` (from logs `remote=x.x.x.x`).
 - **Control UI says too many failed authentication attempts:** Wait for the retry window to expire, then open the Space in an incognito window or clear site storage for your Space before logging in again with `GATEWAY_TOKEN`.
 - **WhatsApp lost its session after restart:** Make sure `HF_USERNAME` and `HF_TOKEN` are configured so the hidden session backup can be restored on boot.
