@@ -117,9 +117,11 @@ function renderDashboard() {
             color: var(--text);
             display: flex;
             justify-content: center;
-            align-items: center;
+            align-items: flex-start;
             min-height: 100vh;
-            overflow: hidden;
+            overflow-x: hidden;
+            overflow-y: auto;
+            padding: 24px 0;
             background-image:
                 radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.15) 0px, transparent 50%),
                 radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.15) 0px, transparent 50%);
@@ -135,6 +137,7 @@ function renderDashboard() {
             padding: 40px;
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
             animation: fadeIn 0.8s ease-out;
+            margin: 24px 0;
         }
 
         @keyframes fadeIn {
@@ -379,6 +382,51 @@ function renderDashboard() {
             font: inherit;
             font-weight: 600;
             cursor: pointer;
+        }
+
+        @media (max-width: 700px) {
+            body {
+                padding: 16px 0;
+            }
+
+            .dashboard {
+                width: calc(100% - 24px);
+                padding: 24px;
+                border-radius: 18px;
+                margin: 12px 0;
+            }
+
+            header {
+                margin-bottom: 28px;
+            }
+
+            h1 {
+                font-size: 2rem;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+                gap: 14px;
+                margin-bottom: 20px;
+            }
+
+            .stat-btn {
+                grid-column: span 1;
+            }
+
+            .stat-card {
+                padding: 16px;
+            }
+
+            .helper-row {
+                flex-direction: column;
+            }
+
+            .helper-input,
+            .helper-button {
+                width: 100%;
+                min-width: 0;
+            }
         }
     </style>
 </head>
@@ -680,7 +728,7 @@ async function createUptimeRobotMonitor(apiKey, host) {
     type: "1",
     friendly_name: `HuggingClaw ${cleanHost}`,
     url: monitorUrl,
-    interval: "5",
+    interval: "30",
   });
 
   if (created.stat !== "ok") {
