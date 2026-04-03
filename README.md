@@ -81,7 +81,7 @@ That's it! The Space will build the container and start up automatically. You ca
 
 ### Step 4: Monitor & Manage
 
-HuggingClaw features a built-in dashboard at `/` (with `/dashboard` kept as an alias) to track:
+HuggingClaw features a built-in dashboard to track:
 
 - **Uptime:** Real-time uptime monitoring.
 - **Sync Status:** Visual indicators for workspace backup operations.
