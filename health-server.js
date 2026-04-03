@@ -12,6 +12,11 @@ const LLM_MODEL = process.env.LLM_MODEL || "Not Set";
 const TELEGRAM_ENABLED = !!process.env.TELEGRAM_BOT_TOKEN;
 const WHATSAPP_ENABLED = /^true$/i.test(process.env.WHATSAPP_ENABLED || "");
 const WHATSAPP_STATUS_FILE = "/tmp/huggingclaw-wa-status.json";
+const DASHBOARD_BASE = "/dashboard";
+const DASHBOARD_STATUS_PATH = `${DASHBOARD_BASE}/status`;
+const DASHBOARD_HEALTH_PATH = `${DASHBOARD_BASE}/health`;
+const DASHBOARD_UPTIMEROBOT_PATH = `${DASHBOARD_BASE}/uptimerobot/setup`;
+const DASHBOARD_APP_BASE = `${DASHBOARD_BASE}/app`;
 
 function parseRequestUrl(url) {
   try {
@@ -22,7 +27,15 @@ function parseRequestUrl(url) {
 }
 
 function isDashboardRoute(pathname) {
-  return pathname === "/dashboard" || pathname === "/dashboard/";
+  return pathname === DASHBOARD_BASE || pathname === `${DASHBOARD_BASE}/`;
+}
+
+function isDashboardScopedPath(pathname, suffix) {
+  return pathname === `${DASHBOARD_BASE}/${suffix}`;
+}
+
+function isDashboardAppRoute(pathname) {
+  return pathname === DASHBOARD_APP_BASE || pathname.startsWith(`${DASHBOARD_APP_BASE}/`);
 }
 
 function isLocalRoute(pathname) {
@@ -30,8 +43,19 @@ function isLocalRoute(pathname) {
     pathname === "/health" ||
     pathname === "/status" ||
     pathname === "/uptimerobot/setup" ||
+    pathname === DASHBOARD_HEALTH_PATH ||
+    pathname === DASHBOARD_STATUS_PATH ||
+    pathname === DASHBOARD_UPTIMEROBOT_PATH ||
     isDashboardRoute(pathname)
   );
+}
+
+function stripDashboardAppPrefix(path) {
+  if (path === DASHBOARD_APP_BASE) return "/";
+  if (path.startsWith(`${DASHBOARD_APP_BASE}/`)) {
+    return path.slice(DASHBOARD_APP_BASE.length) || "/";
+  }
+  return path;
 }
 
 function appendForwarded(existingValue, nextValue) {
@@ -454,7 +478,7 @@ function renderDashboard() {
                 <span class="stat-label">Telegram</span>
                 <span id="tg-status">Loading...</span>
             </div>
-            <a href="/" class="stat-btn">Open Control UI</a>
+            <a href="${DASHBOARD_APP_BASE}/" class="stat-btn">Open Control UI</a>
         </div>
 
         <div class="stat-card" style="width: 100%;">
@@ -510,7 +534,7 @@ function renderDashboard() {
     <script>
         async function updateStats() {
             try {
-                const res = await fetch('/status');
+                const res = await fetch('${DASHBOARD_STATUS_PATH}');
                 const data = await res.json();
 
                 document.getElementById('model-id').textContent = data.model;
@@ -600,7 +624,7 @@ function renderDashboard() {
             result.textContent = '';
 
             try {
-                const res = await fetch('/uptimerobot/setup', {
+                const res = await fetch('${DASHBOARD_UPTIMEROBOT_PATH}', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ apiKey })
@@ -745,13 +769,13 @@ async function createUptimeRobotMonitor(apiKey, host) {
   };
 }
 
-function proxyHttp(req, res) {
+function proxyHttp(req, res, proxyPath = req.url) {
   const proxyReq = http.request(
     {
       hostname: GATEWAY_HOST,
       port: GATEWAY_PORT,
       method: req.method,
-      path: req.url,
+      path: proxyPath,
       headers: buildProxyHeaders(req.headers, req.socket.remoteAddress),
     },
     (proxyRes) => {
@@ -806,12 +830,12 @@ function serializeUpgradeHeaders(req, remoteAddress) {
   return forwardedHeaders;
 }
 
-function proxyUpgrade(req, socket, head) {
+function proxyUpgrade(req, socket, head, proxyPath = req.url) {
   const proxySocket = net.connect(GATEWAY_PORT, GATEWAY_HOST);
 
   proxySocket.on("connect", () => {
     const requestLines = [
-      `${req.method} ${req.url} HTTP/${req.httpVersion}`,
+      `${req.method} ${proxyPath} HTTP/${req.httpVersion}`,
       ...serializeUpgradeHeaders(req, req.socket.remoteAddress),
       "",
       "",
@@ -844,7 +868,7 @@ const server = http.createServer((req, res) => {
   const uptime = Math.floor((Date.now() - startTime) / 1000);
   const uptimeHuman = `${Math.floor(uptime / 3600)}h ${Math.floor((uptime % 3600) / 60)}m`;
 
-  if (pathname === "/health") {
+  if (pathname === "/health" || pathname === DASHBOARD_HEALTH_PATH) {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(
       JSON.stringify({
@@ -857,7 +881,7 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  if (pathname === "/status") {
+  if (pathname === "/status" || pathname === DASHBOARD_STATUS_PATH) {
     void (async () => {
       const guardianStatus = readGuardianStatus();
       res.writeHead(200, { "Content-Type": "application/json" });
@@ -878,7 +902,7 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  if (pathname === "/uptimerobot/setup") {
+  if (pathname === "/uptimerobot/setup" || pathname === DASHBOARD_UPTIMEROBOT_PATH) {
     if (req.method !== "POST") {
       res.writeHead(405, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ message: "Method not allowed" }));
@@ -925,6 +949,13 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (isDashboardAppRoute(pathname)) {
+    const proxyPath =
+      stripDashboardAppPrefix(pathname) + (parsedUrl.search || "");
+    proxyHttp(req, res, proxyPath);
+    return;
+  }
+
   proxyHttp(req, res);
 });
 
@@ -932,6 +963,14 @@ server.on("upgrade", (req, socket, head) => {
   const pathname = parseRequestUrl(req.url || "/").pathname;
   if (isLocalRoute(pathname)) {
     socket.destroy();
+    return;
+  }
+
+  if (isDashboardAppRoute(pathname)) {
+    const parsedUrl = parseRequestUrl(req.url || "/");
+    const proxyPath =
+      stripDashboardAppPrefix(pathname) + (parsedUrl.search || "");
+    proxyUpgrade(req, socket, head, proxyPath);
     return;
   }
 
