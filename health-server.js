@@ -728,7 +728,7 @@ async function createUptimeRobotMonitor(apiKey, host) {
     type: "1",
     friendly_name: `HuggingClaw ${cleanHost}`,
     url: monitorUrl,
-    interval: "30",
+    interval: "300",
   });
 
   if (created.stat !== "ok") {
