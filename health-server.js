@@ -20,6 +20,8 @@ const DASHBOARD_HEALTH_PATH = `${DASHBOARD_BASE}/health`;
 const DASHBOARD_UPTIMEROBOT_PATH = `${DASHBOARD_BASE}/uptimerobot/setup`;
 const DASHBOARD_APP_BASE = `${DASHBOARD_BASE}/app`;
 const APP_BASE = "/app";
+const SPACE_VISIBILITY_TTL_MS = 10 * 60 * 1000;
+const spaceVisibilityCache = new Map();
 
 function parseRequestUrl(url) {
   try {
@@ -131,6 +133,78 @@ function readGuardianStatus() {
   return { configured: true, connected: false, pairing: false };
 }
 
+function decodeJwtPayload(token) {
+  try {
+    const parts = String(token || "").split(".");
+    if (parts.length < 2) return null;
+    const normalized = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+    return JSON.parse(Buffer.from(padded, "base64").toString("utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function getSpaceRef(parsedUrl) {
+  const signedToken = parsedUrl.searchParams.get("__sign");
+  if (!signedToken) return null;
+
+  const payload = decodeJwtPayload(signedToken);
+  const subject = payload && payload.sub;
+  const match =
+    typeof subject === "string"
+      ? subject.match(/^\/spaces\/([^/]+)\/([^/]+)$/)
+      : null;
+
+  if (!match) return null;
+  return { owner: match[1], repo: match[2] };
+}
+
+function fetchStatusCode(url) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(
+      url,
+      {
+        headers: {
+          "user-agent": "HuggingClaw/1.0",
+          accept: "application/json",
+        },
+      },
+      (res) => {
+        res.resume();
+        resolve(res.statusCode || 0);
+      },
+    );
+    req.on("error", reject);
+    req.setTimeout(5000, () => {
+      req.destroy(new Error("Request timed out"));
+    });
+  });
+}
+
+async function resolveSpaceIsPrivate(parsedUrl) {
+  const ref = getSpaceRef(parsedUrl);
+  if (!ref) return false;
+
+  const cacheKey = `${ref.owner}/${ref.repo}`;
+  const cached = spaceVisibilityCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < SPACE_VISIBILITY_TTL_MS) {
+    return cached.isPrivate;
+  }
+
+  try {
+    const statusCode = await fetchStatusCode(
+      `https://huggingface.co/api/spaces/${ref.owner}/${ref.repo}`,
+    );
+    const isPrivate = statusCode === 401 || statusCode === 403 || statusCode === 404;
+    spaceVisibilityCache.set(cacheKey, { isPrivate, timestamp: Date.now() });
+    return isPrivate;
+  } catch {
+    if (cached) return cached.isPrivate;
+    return false;
+  }
+}
+
 function renderChannelBadge(channel, configuredLabel) {
   if (channel && channel.connected) {
     return '<div class="status-badge status-online"><div class="pulse"></div>Active</div>';
@@ -158,6 +232,42 @@ function renderSyncBadge(syncData) {
 
 function renderDashboard(initialData) {
   const controlUiHref = `${APP_BASE}/`;
+  const keepAwakeHtml = initialData.spacePrivate
+    ? `
+            <div id="uptimerobot-private-note" class="helper-summary">
+                <strong>This Space is private.</strong> External monitors cannot reliably access private HF health URLs, so keep-awake setup is only available on public Spaces.
+            </div>
+        `
+    : `
+            <div id="uptimerobot-public-flow">
+                <div id="uptimerobot-summary" class="helper-summary">
+                    One-time setup for public Spaces. Paste your UptimeRobot <strong>Main API key</strong> to create the monitor.
+                </div>
+                <button id="uptimerobot-toggle" class="helper-toggle" type="button">
+                    Set Up Monitor
+                </button>
+                <div id="uptimerobot-shell" class="helper-shell hidden">
+                    <div class="helper-copy">
+                        Do <strong>not</strong> use the Read-only API key or a Monitor-specific API key.
+                    </div>
+                    <div class="helper-row">
+                        <input
+                            id="uptimerobot-key"
+                            class="helper-input"
+                            type="password"
+                            placeholder="Paste your UptimeRobot Main API key"
+                            autocomplete="off"
+                        />
+                        <button id="uptimerobot-btn" class="helper-button" type="button">
+                            Create Monitor
+                        </button>
+                    </div>
+                    <div class="helper-note">
+                        One-time setup. Your key is only used to create the monitor for this Space.
+                    </div>
+                </div>
+            </div>
+        `;
   return `
 <!DOCTYPE html>
 <html lang="en">
@@ -402,6 +512,10 @@ function renderDashboard(initialData) {
             cursor: wait;
         }
 
+        .hidden {
+            display: none !important;
+        }
+
         .helper-note {
             margin-top: 10px;
             font-size: 0.82rem;
@@ -560,37 +674,7 @@ function renderDashboard(initialData) {
 
         <div class="stat-card helper-card">
             <span class="stat-label">Keep Space Awake</span>
-            <div id="uptimerobot-public-flow">
-                <div id="uptimerobot-summary" class="helper-summary">
-                    One-time setup for public Spaces. Paste your UptimeRobot <strong>Main API key</strong> to create the monitor.
-                </div>
-                <button id="uptimerobot-toggle" class="helper-toggle" type="button">
-                    Set Up Monitor
-                </button>
-                <div id="uptimerobot-shell" class="helper-shell hidden">
-                    <div class="helper-copy">
-                        Do <strong>not</strong> use the Read-only API key or a Monitor-specific API key.
-                    </div>
-                    <div class="helper-row">
-                        <input
-                            id="uptimerobot-key"
-                            class="helper-input"
-                            type="password"
-                            placeholder="Paste your UptimeRobot Main API key"
-                            autocomplete="off"
-                        />
-                        <button id="uptimerobot-btn" class="helper-button" type="button">
-                            Create Monitor
-                        </button>
-                    </div>
-                    <div class="helper-note">
-                        One-time setup. Your key is only used to create the monitor for this Space.
-                    </div>
-                </div>
-            </div>
-            <div id="uptimerobot-private-note" class="helper-summary hidden">
-                <strong>This Space is private.</strong> External monitors cannot reliably access private HF health URLs, so keep-awake setup is only available on public Spaces.
-            </div>
+            ${keepAwakeHtml}
             <div id="uptimerobot-result" class="helper-result"></div>
         </div>
 
@@ -655,30 +739,16 @@ function renderDashboard(initialData) {
         }
 
         const monitorStateKey = 'huggingclaw_uptimerobot_setup_v1';
-
-        async function detectPrivateSpace() {
-            const params = new URLSearchParams(window.location.search || '');
-
-            if (!params.has('__sign')) {
-                return false;
-            }
-
-            try {
-                const res = await fetch(getDashboardBase(), {
-                    method: 'GET',
-                    cache: 'no-store',
-                    credentials: 'same-origin'
-                });
-                return !res.ok;
-            } catch {
-                return true;
-            }
-        }
+        const KEEP_AWAKE_PRIVATE = ${initialData.spacePrivate ? "true" : "false"};
 
         function setMonitorUiState(isConfigured) {
             const summary = document.getElementById('uptimerobot-summary');
             const shell = document.getElementById('uptimerobot-shell');
             const toggle = document.getElementById('uptimerobot-toggle');
+
+            if (!summary || !shell || !toggle) {
+                return;
+            }
 
             if (isConfigured) {
                 summary.classList.add('success');
@@ -754,20 +824,12 @@ function renderDashboard(initialData) {
 
         updateStats();
         setInterval(updateStats, 10000);
-        restoreMonitorUiState();
         document.getElementById('control-ui-link').setAttribute('href', getDashboardBase() + '/app/' + getCurrentSearch());
-        detectPrivateSpace().then((isPrivate) => {
-            if (isPrivate) {
-                document.getElementById('uptimerobot-public-flow').classList.add('hidden');
-                document.getElementById('uptimerobot-private-note').classList.remove('hidden');
-                document.getElementById('uptimerobot-result').className = 'helper-result';
-                document.getElementById('uptimerobot-result').textContent = '';
-                return;
-            }
-
+        if (!KEEP_AWAKE_PRIVATE) {
+            restoreMonitorUiState();
             document.getElementById('uptimerobot-btn').addEventListener('click', setupUptimeRobot);
             document.getElementById('uptimerobot-toggle').addEventListener('click', toggleMonitorSetup);
-        });
+        }
     </script>
 </body>
 </html>
@@ -1064,20 +1126,23 @@ const server = http.createServer((req, res) => {
   }
 
   if (isDashboardRoute(pathname)) {
-    const guardianStatus = readGuardianStatus();
-    const initialData = {
-      model: LLM_MODEL,
-      whatsapp: {
-        configured: guardianStatus.configured,
-        connected: guardianStatus.connected,
-        pairing: guardianStatus.pairing,
-      },
-      telegram: normalizeChannelStatus(null, TELEGRAM_ENABLED),
-      sync: readSyncStatus(),
-      uptime: uptimeHuman,
-    };
-    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-    res.end(renderDashboard(initialData));
+    void (async () => {
+      const guardianStatus = readGuardianStatus();
+      const initialData = {
+        model: LLM_MODEL,
+        whatsapp: {
+          configured: guardianStatus.configured,
+          connected: guardianStatus.connected,
+          pairing: guardianStatus.pairing,
+        },
+        telegram: normalizeChannelStatus(null, TELEGRAM_ENABLED),
+        sync: readSyncStatus(),
+        uptime: uptimeHuman,
+        spacePrivate: await resolveSpaceIsPrivate(parsedUrl),
+      };
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(renderDashboard(initialData));
+    })();
     return;
   }
 
