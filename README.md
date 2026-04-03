@@ -26,7 +26,6 @@ license: mit
 - [📱 Telegram Setup *(Optional)*](#-telegram-setup-optional)
 - [💬 WhatsApp Setup *(Optional)*](#-whatsapp-setup-optional)
 - [💾 Workspace Backup *(Optional)*](#-workspace-backup-optional)
-- [📊 Dashboard & Monitoring](#-dashboard--monitoring)
 - [🔔 Webhooks *(Optional)*](#-webhooks-optional)
 - [🔐 Security & Advanced *(Optional)*](#-security--advanced-optional)
 - [🤖 LLM Providers](#-llm-providers)
@@ -81,6 +80,15 @@ Optional: if you want to pin a specific OpenClaw release instead of `latest`, ad
 
 That's it! The Space will build the container and start up automatically. You can monitor the build process in the **Logs** tab.
 
+### Step 4: Monitor & Manage
+
+HuggingClaw features a built-in dashboard at `/dashboard` (served from the same URL as the Control UI) to track:
+
+- **Uptime:** Real-time uptime monitoring.
+- **Sync Status:** Visual indicators for workspace backup operations.
+- **Chat Status:** Real-time connection status for WhatsApp and Telegram.
+- **Model Info:** See which LLM is currently powering your assistant.
+
 ## 📱 Telegram Setup *(Optional)*
 
 To chat via Telegram:
@@ -119,14 +127,6 @@ For persistent chat history and configuration, HuggingClaw can sync your workspa
 > [!TIP]
 > This backup also stores a hidden copy of your WhatsApp session credentials, allowing paired logins to survive Space restarts automatically.
 
-## 📊 Dashboard & Monitoring
-
-HuggingClaw now features a built-in dashboard at `/dashboard`, served from the same public HF Space URL as the Control UI:
-
-- **Uptime Tracking:** Real-time uptime monitoring.
-- **Sync Status:** Visual indicators for workspace backup operations.
-- **Model Info:** See which LLM is currently powering your assistant.
-
 ## 🔔 Webhooks *(Optional)*
 
 Get notified when your Space restarts or if a backup fails:
@@ -151,7 +151,7 @@ Configure password access and network restrictions:
 HuggingClaw supports **all providers** from OpenClaw. Set `LLM_MODEL=<provider/model>` and the provider is auto-detected. For example:
 
 | Provider         | Prefix          | Example Model                         | API Key Source                                       |
-|------------------|-----------------|---------------------------------------|------------------------------------------------------|
+| :--------------- | :-------------- | :------------------------------------ | :--------------------------------------------------- |
 | **Anthropic**    | `anthropic/`    | `anthropic/claude-sonnet-4-6`         | [Anthropic Console](https://console.anthropic.com/) |
 | **OpenAI**       | `openai/`       | `openai/gpt-5.4`                      | [OpenAI Platform](https://platform.openai.com/)     |
 | **Google**       | `google/`       | `google/gemini-2.5-flash`             | [AI Studio](https://ai.google.dev/)                  |
