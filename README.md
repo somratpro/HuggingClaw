@@ -60,7 +60,7 @@ Watch a quick walkthrough on YouTube: [Deploying HuggingClaw on HF Spaces](https
 
 [![Duplicate this Space](https://huggingface.co/datasets/huggingface/badges/resolve/main/duplicate-this-space-xl.svg)](https://huggingface.co/spaces/somratpro/HuggingClaw?duplicate=true)
 
-Click the button above to duplicate the template. And set the visibility to **Private** (recommended).
+Click the button above to duplicate the template. 
 
 ### Step 2: Add Your Secrets
 
