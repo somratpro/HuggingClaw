@@ -15,8 +15,15 @@ import shutil
 import subprocess
 from pathlib import Path
 
-WORKSPACE = Path("/home/node/.openclaw/workspace")
+OPENCLAW_HOME = Path("/home/node/.openclaw")
+WORKSPACE = OPENCLAW_HOME / "workspace"
 STATE_DIR = WORKSPACE / ".huggingclaw-state"
+OPENCLAW_STATE_BACKUP_DIR = STATE_DIR / "openclaw"
+PERSISTED_STATE_PATHS = {
+    "agents": OPENCLAW_HOME / "agents",
+    "memory": OPENCLAW_HOME / "memory",
+    "extensions": OPENCLAW_HOME / "extensions",
+}
 WHATSAPP_CREDS_DIR = Path("/home/node/.openclaw/credentials/whatsapp/default")
 WHATSAPP_BACKUP_DIR = STATE_DIR / "credentials" / "whatsapp" / "default"
 RESET_MARKER = WORKSPACE / ".reset_credentials"
@@ -52,6 +59,21 @@ def snapshot_state_into_workspace() -> None:
     This keeps WhatsApp credentials in a hidden folder that is synced together
     with the workspace, without changing the live credentials location.
     """
+    try:
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
+
+        for name, source_path in PERSISTED_STATE_PATHS.items():
+            if not source_path.exists():
+                continue
+
+            backup_path = OPENCLAW_STATE_BACKUP_DIR / name
+            backup_path.parent.mkdir(parents=True, exist_ok=True)
+            if backup_path.exists():
+                shutil.rmtree(backup_path, ignore_errors=True)
+            shutil.copytree(source_path, backup_path)
+    except Exception as e:
+        print(f"  ⚠️ Could not snapshot OpenClaw state: {e}")
+
     try:
         if not WHATSAPP_ENABLED:
             return

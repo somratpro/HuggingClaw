@@ -91,6 +91,8 @@ esac
 # ── Setup directories ──
 mkdir -p /home/node/.openclaw/agents/main/sessions
 mkdir -p /home/node/.openclaw/credentials
+mkdir -p /home/node/.openclaw/memory
+mkdir -p /home/node/.openclaw/extensions
 mkdir -p /home/node/.openclaw/workspace
 chmod 700 /home/node/.openclaw
 chmod 700 /home/node/.openclaw/credentials
@@ -164,6 +166,28 @@ if [ -n "$HF_USERNAME" ] && [ -n "$HF_TOKEN" ]; then
   fi
   cd /
 fi
+
+# ── Restore persisted OpenClaw state (if present) ──
+STATE_BACKUP_ROOT="/home/node/.openclaw/workspace/.huggingclaw-state/openclaw"
+restore_state_dir() {
+  local name="$1"
+  local source_dir="${STATE_BACKUP_ROOT}/${name}"
+  local target_dir="/home/node/.openclaw/${name}"
+
+  if [ ! -d "$source_dir" ]; then
+    return
+  fi
+
+  echo "🧠 Restoring OpenClaw ${name} state..."
+  rm -rf "$target_dir"
+  mkdir -p "$(dirname "$target_dir")"
+  cp -R "$source_dir" "$target_dir"
+  echo "  ✅ ${name} restored"
+}
+
+restore_state_dir "agents"
+restore_state_dir "memory"
+restore_state_dir "extensions"
 
 # ── Restore persisted WhatsApp credentials (if present) ──
 WA_BACKUP_DIR="/home/node/.openclaw/workspace/.huggingclaw-state/credentials/whatsapp/default"
