@@ -15,6 +15,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+
 OPENCLAW_HOME = Path("/home/node/.openclaw")
 WORKSPACE = OPENCLAW_HOME / "workspace"
 STATE_DIR = WORKSPACE / ".huggingclaw-state"
