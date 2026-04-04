@@ -412,6 +412,12 @@ fi
 graceful_shutdown() {
   echo ""
   echo "🛑 Shutting down gracefully..."
+
+  if [ -f "/home/node/app/workspace-sync.py" ]; then
+    echo "🧠 Snapshotting OpenClaw state before exit..."
+    python3 /home/node/app/workspace-sync.py --snapshot-once 2>/dev/null || \
+      echo "  ⚠️ Could not snapshot OpenClaw state before shutdown"
+  fi
   
   # Commit any unsaved workspace changes
   if [ -d "/home/node/.openclaw/workspace/.git" ]; then

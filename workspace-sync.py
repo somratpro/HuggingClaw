@@ -206,6 +206,11 @@ def sync_with_git():
 
 
 def main():
+    if "--snapshot-once" in sys.argv:
+        snapshot_state_into_workspace()
+        write_sync_status("configured", "State snapshot refreshed during shutdown.")
+        return
+
     if not WORKSPACE.exists():
         print("📁 Workspace sync: workspace not found, exiting.")
         return
