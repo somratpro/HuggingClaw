@@ -231,6 +231,73 @@ CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".gateway.auth.token = \"$GATEWAY_TOKEN\"
 # Model configuration at top level
 CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".agents.defaults.model = \"$LLM_MODEL\"")
 
+# Optional: dynamic custom OpenAI-compatible provider registration
+CUSTOM_PROVIDER_NAME="${CUSTOM_PROVIDER_NAME:-}"
+CUSTOM_BASE_URL="${CUSTOM_BASE_URL:-}"
+CUSTOM_MODEL_ID="${CUSTOM_MODEL_ID:-}"
+CUSTOM_MODEL_NAME="${CUSTOM_MODEL_NAME:-$CUSTOM_MODEL_ID}"
+CUSTOM_API_KEY="${CUSTOM_API_KEY:-$LLM_API_KEY}"
+CUSTOM_API_TYPE="${CUSTOM_API_TYPE:-openai-completions}"
+CUSTOM_CONTEXT_WINDOW="${CUSTOM_CONTEXT_WINDOW:-128000}"
+CUSTOM_MAX_TOKENS="${CUSTOM_MAX_TOKENS:-500}"
+
+if [ -n "$CUSTOM_PROVIDER_NAME" ] || [ -n "$CUSTOM_BASE_URL" ] || [ -n "$CUSTOM_MODEL_ID" ]; then
+  CUSTOM_PROVIDER_NORMALIZED=$(printf '%s' "$CUSTOM_PROVIDER_NAME" | tr '[:upper:]' '[:lower:]')
+  CUSTOM_BASE_URL_NORMALIZED="${CUSTOM_BASE_URL%/}"
+  CUSTOM_PROVIDER_OK=true
+
+  if [ -z "$CUSTOM_PROVIDER_NAME" ] || [ -z "$CUSTOM_BASE_URL" ] || [ -z "$CUSTOM_MODEL_ID" ]; then
+    echo "⚠️  Custom provider skipped: set CUSTOM_PROVIDER_NAME, CUSTOM_BASE_URL, and CUSTOM_MODEL_ID together."
+    CUSTOM_PROVIDER_OK=false
+  fi
+
+  case "$CUSTOM_PROVIDER_NORMALIZED" in
+    anthropic|openai|openai-codex|google|google-vertex|deepseek|opencode|opencode-go|openrouter|kilocode|vercel-ai-gateway|zai|z-ai|z.ai|zhipu|moonshot|kimi-coding|minimax|qwen|modelstudio|xiaomi|volcengine|volcengine-plan|byteplus|byteplus-plan|qianfan|mistral|mistralai|xai|x-ai|nvidia|cohere|groq|together|huggingface|cerebras|venice|synthetic|github-copilot)
+      echo "⚠️  Custom provider skipped: CUSTOM_PROVIDER_NAME='$CUSTOM_PROVIDER_NAME' conflicts with a built-in provider."
+      CUSTOM_PROVIDER_OK=false
+      ;;
+  esac
+
+  if [[ "$CUSTOM_BASE_URL_NORMALIZED" == */chat/completions ]] || [[ "$CUSTOM_BASE_URL_NORMALIZED" == */completions ]]; then
+    echo "⚠️  Custom provider skipped: CUSTOM_BASE_URL should be the API base URL, not a completions endpoint."
+    CUSTOM_PROVIDER_OK=false
+  fi
+
+  if ! [[ "$CUSTOM_CONTEXT_WINDOW" =~ ^[0-9]+$ ]] || ! [[ "$CUSTOM_MAX_TOKENS" =~ ^[0-9]+$ ]]; then
+    echo "⚠️  Custom provider skipped: CUSTOM_CONTEXT_WINDOW and CUSTOM_MAX_TOKENS must be whole numbers."
+    CUSTOM_PROVIDER_OK=false
+  fi
+
+  if [ "$CUSTOM_PROVIDER_OK" = "true" ]; then
+    echo "🔧 Registering custom provider: $CUSTOM_PROVIDER_NAME → $CUSTOM_BASE_URL_NORMALIZED"
+    CONFIG_JSON=$(jq \
+      --arg provider "$CUSTOM_PROVIDER_NAME" \
+      --arg baseUrl "$CUSTOM_BASE_URL_NORMALIZED" \
+      --arg apiKey "$CUSTOM_API_KEY" \
+      --arg apiType "$CUSTOM_API_TYPE" \
+      --arg modelId "$CUSTOM_MODEL_ID" \
+      --arg modelName "$CUSTOM_MODEL_NAME" \
+      --argjson contextWindow "$CUSTOM_CONTEXT_WINDOW" \
+      --argjson maxTokens "$CUSTOM_MAX_TOKENS" \
+      '.models.mode = "merge" |
+       .models.providers[$provider] = {
+         "baseUrl": $baseUrl,
+         "apiKey": $apiKey,
+         "api": $apiType,
+         "models": [{
+           "id": $modelId,
+           "name": $modelName,
+           "contextWindow": $contextWindow,
+           "maxTokens": $maxTokens
+         }]
+       }' <<<"$CONFIG_JSON")
+
+    if [[ "$LLM_MODEL" != "$CUSTOM_PROVIDER_NAME/"* ]]; then
+      echo "⚠️  Custom provider registered, but LLM_MODEL='$LLM_MODEL' does not start with '$CUSTOM_PROVIDER_NAME/'."
+    fi
+  fi
+fi
+
 # Browser configuration (managed local Chromium in HF/Docker)
 BROWSER_EXECUTABLE_PATH=""
 for candidate in /usr/bin/chromium /usr/bin/chromium-browser /snap/bin/chromium; do
