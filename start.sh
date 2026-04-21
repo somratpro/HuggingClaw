@@ -380,41 +380,6 @@ chmod 600 /home/node/.openclaw/openclaw.json
 # This preload script keeps iframe embedding working on HF Spaces.
 export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--require /home/node/app/iframe-fix.cjs"
 
-# ── Patch OpenClaw scope-clearing bug for headless HF auth ──
-# OpenClaw can clear requested operator scopes after allowing a token-auth
-# connection without device identity, which breaks the WhatsApp guardian's
-# web.login.wait / channels.status calls on Spaces.
-patch_openclaw_scope_bug() {
-  local roots=(
-    "/home/node/.openclaw/openclaw-app"
-    "/usr/local/lib/node_modules/openclaw"
-  )
-  local target=""
-  local updated=0
-
-  for root in "${roots[@]}"; do
-    [ -d "$root/dist" ] || continue
-    target=$(find "$root/dist" -maxdepth 1 -type f -name 'gateway-cli-*.js' | head -n 1)
-    [ -n "$target" ] || continue
-
-    if grep -q 'return params.decision.kind !== "allow" || !params.controlUiAuthPolicy.allowBypass' "$target"; then
-      perl -0pi -e 's@return params\.decision\.kind !== "allow" \|\| !params\.controlUiAuthPolicy\.allowBypass && !params\.preserveInsecureLocalControlUiScopes && \(params\.authMethod === "token" \|\| params\.authMethod === "password" \|\| params\.authMethod === "trusted-proxy" \|\| params\.trustedProxyAuthOk === true\);@return params.decision.kind !== "allow";@g' "$target"
-
-      if grep -q 'return params.decision.kind !== "allow";' "$target"; then
-        echo "🔧 Patched OpenClaw scope-clearing bug in $(basename "$target")"
-        updated=1
-        break
-      fi
-    fi
-  done
-
-  if [ "$updated" -eq 0 ]; then
-    echo "⚠️  OpenClaw scope patch not applied (bundle format may have changed)"
-  fi
-}
-
-patch_openclaw_scope_bug
-
 # ── Startup Summary ──
 echo ""
 echo "  ┌──────────────────────────────────────────┐"
