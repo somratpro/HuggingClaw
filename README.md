@@ -221,47 +221,27 @@ The provider prefix in `LLM_MODEL` tells HuggingClaw how to call it. See [OpenCl
 
 ### Custom OpenAI-Compatible Provider
 
-You can register your own OpenAI-compatible endpoint at startup without touching OpenClaw CLI.
+Register a custom endpoint at startup without modifying the CLI.
 
-Required env vars:
+| Variable | Description | Default |
+| :--- | :--- | :--- |
+| `CUSTOM_PROVIDER_NAME` | Unique provider prefix (e.g., `modal`) | **Required** |
+| `CUSTOM_BASE_URL` | API base URL (e.g., `https://.../v1`) | **Required** |
+| `CUSTOM_MODEL_ID` | Model ID on the server | **Required** |
+| `LLM_MODEL` | Must match `{CUSTOM_PROVIDER_NAME}/{CUSTOM_MODEL_ID}` | **Required** |
+| `CUSTOM_API_KEY` | Provider-specific key | `LLM_API_KEY` |
+| `CUSTOM_CONTEXT_WINDOW` | Context limit | `128000` |
 
+> [!TIP]
+> `CUSTOM_PROVIDER_NAME` cannot override built-in providers (openai, anthropic, etc.).
+
+**Example (Modal):**
 ```bash
-LLM_API_KEY=your_api_key
-LLM_MODEL=modal/zai-org/GLM-5.1-FP8
 CUSTOM_PROVIDER_NAME=modal
 CUSTOM_BASE_URL=https://api.us-west-2.modal.direct/v1
 CUSTOM_MODEL_ID=zai-org/GLM-5.1-FP8
+LLM_MODEL=modal/zai-org/GLM-5.1-FP8
 ```
-
-Optional env vars:
-
-```bash
-CUSTOM_MODEL_NAME=GLM-5.1-FP8
-CUSTOM_API_KEY=your_custom_api_key
-CUSTOM_API_TYPE=openai-completions
-CUSTOM_CONTEXT_WINDOW=128000
-CUSTOM_MAX_TOKENS=500
-```
-
-Notes:
-
-- This is for **OpenAI-compatible** endpoints only.
-- `CUSTOM_BASE_URL` should be the API base URL, not `/chat/completions`.
-- `CUSTOM_PROVIDER_NAME` must be a new name and cannot override built-in providers like `openai`, `openrouter`, `google`, or `anthropic`.
-- If `CUSTOM_API_KEY` is not set, HuggingClaw uses `LLM_API_KEY`.
-
-Examples:
-
-- Modal-hosted model:
-  - `CUSTOM_PROVIDER_NAME=modal`
-  - `CUSTOM_BASE_URL=https://api.us-west-2.modal.direct/v1`
-  - `CUSTOM_MODEL_ID=zai-org/GLM-5.1-FP8`
-  - `LLM_MODEL=modal/zai-org/GLM-5.1-FP8`
-- Self-hosted vLLM:
-  - `CUSTOM_PROVIDER_NAME=vllm`
-  - `CUSTOM_BASE_URL=https://your-vllm.example.com/v1`
-  - `CUSTOM_MODEL_ID=Qwen/Qwen2.5-72B-Instruct`
-  - `LLM_MODEL=vllm/Qwen/Qwen2.5-72B-Instruct`
 
 ## 💻 Local Development
 
