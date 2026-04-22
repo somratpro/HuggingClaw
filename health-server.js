@@ -657,7 +657,7 @@ function renderDashboard(initialData) {
                 <span class="stat-label">Telegram</span>
                 <span id="tg-status">${renderChannelBadge(initialData.telegram, "Configured")}</span>
             </div>
-            <a href="${controlUiHref}" id="control-ui-link" class="stat-btn">Open Control UI</a>
+            <a href="${controlUiHref}" id="control-ui-link" class="stat-btn" target="_blank" rel="noopener noreferrer">Open Control UI</a>
         </div>
 
         <div class="stat-card" style="width: 100%;">
