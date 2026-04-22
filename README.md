@@ -7,6 +7,13 @@ sdk: docker
 app_port: 7861
 pinned: true
 license: mit
+secrets:
+  - name: LLM_API_KEY
+    description: Your LLM provider API key (e.g. Anthropic, OpenAI, OpenRouter).
+  - name: LLM_MODEL
+    description: The model ID to use, e.g. openai/gpt-4o or google/gemini-2.5-flash.
+  - name: GATEWAY_TOKEN
+    description: A strong password or token to secure your OpenClaw Control UI.
 ---
 
 <!-- Badges -->
