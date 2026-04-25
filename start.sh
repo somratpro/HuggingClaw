@@ -14,12 +14,17 @@ OPENCLAW_RUNTIME_VERSION=""
 WHATSAPP_ENABLED="${WHATSAPP_ENABLED:-false}"
 WHATSAPP_ENABLED_NORMALIZED=$(printf '%s' "$WHATSAPP_ENABLED" | tr '[:upper:]' '[:lower:]')
 SYNC_INTERVAL="${SYNC_INTERVAL:-180}"
-OPENCLAW_CONSOLE_LOG_LEVEL="${OPENCLAW_CONSOLE_LOG_LEVEL:-warn}"
-OPENCLAW_FILE_LOG_LEVEL="${OPENCLAW_FILE_LOG_LEVEL:-info}"
-OPENCLAW_CONSOLE_LOG_STYLE="${OPENCLAW_CONSOLE_LOG_STYLE:-compact}"
-
-# HF Spaces does not benefit from Bonjour discovery, and the retries add noise.
-export OPENCLAW_DISABLE_BONJOUR="${OPENCLAW_DISABLE_BONJOUR:-1}"
+if [ -n "${SPACE_HOST:-}" ]; then
+  OPENCLAW_CONSOLE_LOG_LEVEL="${OPENCLAW_CONSOLE_LOG_LEVEL:-warn}"
+  OPENCLAW_FILE_LOG_LEVEL="${OPENCLAW_FILE_LOG_LEVEL:-info}"
+  OPENCLAW_CONSOLE_LOG_STYLE="${OPENCLAW_CONSOLE_LOG_STYLE:-compact}"
+  # HF Spaces does not benefit from Bonjour discovery, and the retries add noise.
+  export OPENCLAW_DISABLE_BONJOUR="${OPENCLAW_DISABLE_BONJOUR:-1}"
+else
+  OPENCLAW_CONSOLE_LOG_LEVEL="${OPENCLAW_CONSOLE_LOG_LEVEL:-info}"
+  OPENCLAW_FILE_LOG_LEVEL="${OPENCLAW_FILE_LOG_LEVEL:-info}"
+  OPENCLAW_CONSOLE_LOG_STYLE="${OPENCLAW_CONSOLE_LOG_STYLE:-pretty}"
+fi
 echo ""
 echo "  ╔══════════════════════════════════════════╗"
 echo "  ║          🦞 HuggingClaw Gateway          ║"
@@ -260,6 +265,20 @@ BROWSER_SHOULD_ENABLE=false
 if [ -n "$BROWSER_EXECUTABLE_PATH" ] && [ -x "$BROWSER_EXECUTABLE_PATH" ]; then
   BROWSER_SHOULD_ENABLE=true
 fi
+
+# Restrict bundled plugin loading on HF Spaces so unrelated broken plugins do not crash the gateway after startup.
+PLUGIN_ALLOW_JSON='["acpx","device-pair","phone-control","talk-voice"]'
+if [ "$BROWSER_SHOULD_ENABLE" = "true" ]; then
+  PLUGIN_ALLOW_JSON=$(jq '. + ["browser"]' <<<"$PLUGIN_ALLOW_JSON")
+fi
+if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
+  PLUGIN_ALLOW_JSON=$(jq '. + ["telegram"]' <<<"$PLUGIN_ALLOW_JSON")
+fi
+if [ "$WHATSAPP_ENABLED_NORMALIZED" = "true" ]; then
+  PLUGIN_ALLOW_JSON=$(jq '. + ["whatsapp"]' <<<"$PLUGIN_ALLOW_JSON")
+fi
+CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".plugins.allow = $PLUGIN_ALLOW_JSON")
+CONFIG_JSON=$(echo "$CONFIG_JSON" | jq '.plugins.entries.lmstudio.enabled = false | .plugins.entries.xai.enabled = false')
 
 if [ "$BROWSER_SHOULD_ENABLE" = "true" ]; then
   CONFIG_JSON=$(echo "$CONFIG_JSON" | jq \
