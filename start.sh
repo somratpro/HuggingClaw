@@ -357,11 +357,12 @@ if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
   export TELEGRAM_BOT_TOKEN="$TELEGRAM_BOT_TOKEN"
   export OPENCLAW_TELEGRAM_DISABLE_AUTO_SELECT_FAMILY=1
   export OPENCLAW_TELEGRAM_DNS_RESULT_ORDER=ipv4first
-  CONFIG_JSON=$(echo "$CONFIG_JSON" | jq --arg token "$TELEGRAM_BOT_TOKEN" '
+  CONFIG_JSON=$(echo "$CONFIG_JSON" | jq --arg token "$TELEGRAM_BOT_TOKEN" --arg proxy_url "${CLOUDFLARE_PROXY_URL:-}" '
     .channels.telegram.enabled = true
     | .channels.telegram.botToken = $token
     | .channels.telegram.commands.native = false
     | .channels.telegram.timeoutSeconds = 60
+    | (if $proxy_url != "" then .channels.telegram.apiRoot = $proxy_url else . end)
     # | .channels.telegram.network.autoSelectFamily = false
     # | .channels.telegram.network.dnsResultOrder = "ipv4first"
     | .channels.telegram.retry = {

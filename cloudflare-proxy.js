@@ -250,18 +250,21 @@ if (PROXY_URL) {
         }
       };
 
-      patchDispatch(exports.Dispatcher?.prototype, "Dispatcher");
-      patchDispatch(exports.Client?.prototype, "Client");
-      patchDispatch(exports.Pool?.prototype, "Pool");
-      patchDispatch(exports.Agent?.prototype, "Agent");
-      patchDispatch(exports.ProxyAgent?.prototype, "ProxyAgent");
-
-      // Patch the current global dispatcher
-      if (exports.getGlobalDispatcher) {
-        const globalDispatcher = exports.getGlobalDispatcher();
-        if (globalDispatcher && globalDispatcher.dispatch && !globalDispatcher.dispatch._patched) {
-          patchDispatch(globalDispatcher, "GlobalDispatcherInstance");
+      // Discover and patch all Dispatcher-like classes in the module
+      for (const key in exports) {
+        if (exports[key] && exports[key].prototype && typeof exports[key].prototype.dispatch === 'function') {
+           patchDispatch(exports[key].prototype, key);
         }
+      }
+
+      // Patch the current global dispatcher instance
+      if (exports.getGlobalDispatcher) {
+        try {
+          const globalDispatcher = exports.getGlobalDispatcher();
+          if (globalDispatcher && globalDispatcher.dispatch && !globalDispatcher.dispatch._patched) {
+            patchDispatch(globalDispatcher, "GlobalDispatcherInstance");
+          }
+        } catch (e) {}
       }
 
       if (exports.fetch && !exports.fetch._patched) {
