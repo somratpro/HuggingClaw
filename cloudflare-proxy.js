@@ -192,6 +192,67 @@ if (PROXY_URL) {
 
     const patchUndiciInstance = (exports) => {
       if (!exports) return;
+
+      const patchDispatch = (proto, name) => {
+        if (proto && proto.dispatch && !proto.dispatch._patched) {
+          const origDispatch = proto.dispatch;
+          proto.dispatch = function(options, handler) {
+            let origin = options.origin || this.origin;
+            if (origin && typeof origin !== 'string') {
+              try { origin = origin.origin || origin.toString(); } catch (e) { origin = ""; }
+            }
+            
+            let hostname = "";
+            try {
+              hostname = new URL(String(origin)).hostname;
+            } catch(e) {
+              hostname = String(origin || "").split(':')[0];
+            }
+
+            if (hostname && shouldProxyHost(hostname)) {
+              if (DEBUG) log(`[cloudflare-proxy] Redirecting undici ${name}.dispatch: ${hostname}${options.path || ""} -> ${proxy.hostname}`);
+              
+              let headers = options.headers;
+              const targetHeader = "x-target-host";
+              const secretHeader = "x-proxy-key";
+
+              if (Array.isArray(headers)) {
+                let foundTarget = false;
+                for (let i = 0; i < headers.length; i += 2) {
+                  if (String(headers[i]).toLowerCase() === targetHeader) {
+                    foundTarget = true;
+                    break;
+                  }
+                }
+                if (!foundTarget) {
+                  headers.push(targetHeader, hostname);
+                  if (PROXY_SHARED_SECRET) headers.push(secretHeader, PROXY_SHARED_SECRET);
+                }
+              } else {
+                options.headers = headers || {};
+                if (options.headers instanceof Map || (typeof options.headers.set === 'function')) {
+                  options.headers.set(targetHeader, hostname);
+                  if (PROXY_SHARED_SECRET) options.headers.set(secretHeader, PROXY_SHARED_SECRET);
+                } else {
+                  options.headers[targetHeader] = hostname;
+                  if (PROXY_SHARED_SECRET) options.headers[secretHeader] = PROXY_SHARED_SECRET;
+                }
+              }
+              options.origin = `https://${proxy.hostname}`;
+            }
+            return origDispatch.call(this, options, handler);
+          };
+          proto.dispatch._patched = true;
+          if (DEBUG) log(`[cloudflare-proxy] Patched undici ${name}.prototype.dispatch`);
+        }
+      };
+
+      patchDispatch(exports.Dispatcher?.prototype, "Dispatcher");
+      patchDispatch(exports.Client?.prototype, "Client");
+      patchDispatch(exports.Pool?.prototype, "Pool");
+      patchDispatch(exports.Agent?.prototype, "Agent");
+      patchDispatch(exports.ProxyAgent?.prototype, "ProxyAgent");
+
       if (exports.fetch && !exports.fetch._patched) {
         exports.fetch = async function (input, init) {
           return globalThis.fetch(input, init);
@@ -221,67 +282,6 @@ if (PROXY_URL) {
         };
         exports.request._patched = true;
         if (DEBUG) log("[cloudflare-proxy] Patched undici.request");
-      }
-
-      if (exports.Dispatcher && exports.Dispatcher.prototype.dispatch && !exports.Dispatcher.prototype.dispatch._patched) {
-        const origDispatch = exports.Dispatcher.prototype.dispatch;
-        exports.Dispatcher.prototype.dispatch = function(options, handler) {
-          // In undici, Pool/Client instances have a .origin property. 
-          // options.origin might be missing for instance-bound calls.
-          let origin = options.origin || this.origin;
-          if (origin && typeof origin !== 'string') {
-            try { origin = origin.origin || origin.toString(); } catch (e) { origin = ""; }
-          }
-          
-          let hostname = "";
-          try {
-            hostname = new URL(String(origin)).hostname;
-          } catch(e) {
-            hostname = String(origin || "").split(':')[0];
-          }
-
-          if (hostname && shouldProxyHost(hostname)) {
-            if (DEBUG) log(`[cloudflare-proxy] Redirecting undici dispatch: ${hostname}${options.path || ""} -> ${proxy.hostname}`);
-            
-            // Ensure we have headers to modify
-            let headers = options.headers;
-            const targetHeader = "x-target-host";
-            const secretHeader = "x-proxy-key";
-
-            if (Array.isArray(headers)) {
-              // undici internal header array format: [key, value, key, value, ...]
-              let foundTarget = false;
-              for (let i = 0; i < headers.length; i += 2) {
-                if (String(headers[i]).toLowerCase() === targetHeader) {
-                  foundTarget = true;
-                  break;
-                }
-              }
-              if (!foundTarget) {
-                headers.push(targetHeader, hostname);
-                if (PROXY_SHARED_SECRET) headers.push(secretHeader, PROXY_SHARED_SECRET);
-              }
-            } else {
-              // Object or Headers format
-              options.headers = headers || {};
-              if (options.headers instanceof Map || (typeof options.headers.set === 'function')) {
-                options.headers.set(targetHeader, hostname);
-                if (PROXY_SHARED_SECRET) options.headers.set(secretHeader, PROXY_SHARED_SECRET);
-              } else {
-                options.headers[targetHeader] = hostname;
-                if (PROXY_SHARED_SECRET) options.headers[secretHeader] = PROXY_SHARED_SECRET;
-              }
-            }
-            
-            // Redirect the origin to the proxy
-            options.origin = `https://${proxy.hostname}`;
-            // For Pools/Clients, we might need to override the internal state or just hope the dispatch options take precedence.
-            // In most undici versions, options.origin takes precedence in Dispatcher.dispatch.
-          }
-          return origDispatch.call(this, options, handler);
-        };
-        exports.Dispatcher.prototype.dispatch._patched = true;
-        if (DEBUG) log("[cloudflare-proxy] Patched undici.Dispatcher.prototype.dispatch");
       }
     };
 
