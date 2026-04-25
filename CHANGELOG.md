@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - **Custom OpenAI-compatible provider registration** — HuggingClaw can now register a custom provider at startup with `CUSTOM_PROVIDER_NAME`, `CUSTOM_BASE_URL`, and `CUSTOM_MODEL_ID`, so you can point `LLM_MODEL` at your own OpenAI-compatible endpoint without modifying the OpenClaw CLI
+- **Automatic Cloudflare outbound proxy setup** — HuggingClaw can now provision and use a Cloudflare Worker proxy for blocked outbound traffic from a `CLOUDFLARE_API_TOKEN`, with the same transparent proxy model used in Hugging8n
 
 ### Changed
 
@@ -14,6 +15,8 @@ All notable changes to this project will be documented in this file.
 - **HF username no longer required in most cases** — backup namespace resolution now works from `HF_USERNAME`, `SPACE_AUTHOR_NAME`, or the authenticated HF token, so `HF_TOKEN` is usually enough on its own
 - **Startup restore path modernized** — startup now restores workspace and hidden state through `workspace-sync.py restore` instead of configuring a token-bearing git remote
 - **README refreshed for the new backup model** — documentation now describes token-only backup setup, the removed git sync assumptions, and the hardened dashboard helper behavior
+- **Telegram networking simplified** — removed the channel-specific Telegram transport tweaks in favor of the generic Cloudflare outbound proxy path
+- **DNS monkey-patch removed** — HuggingClaw now relies on the Cloudflare outbound proxy path instead of the old `dns-fix.js` preload
 
 ### Fixed
 
@@ -96,4 +99,3 @@ All notable changes to this project will be documented in this file.
 - `start.sh` — config generator + validation + orchestrator
 - `workspace-sync.sh` — periodic workspace backup
 - `health-server.js` — lightweight health endpoint
-- `dns-fix.js` — DNS override for HF network restrictions

@@ -18,8 +18,6 @@ if [ -n "${SPACE_HOST:-}" ]; then
   OPENCLAW_CONSOLE_LOG_LEVEL="${OPENCLAW_CONSOLE_LOG_LEVEL:-warn}"
   OPENCLAW_FILE_LOG_LEVEL="${OPENCLAW_FILE_LOG_LEVEL:-info}"
   OPENCLAW_CONSOLE_LOG_STYLE="${OPENCLAW_CONSOLE_LOG_STYLE:-compact}"
-  TELEGRAM_NATIVE_COMMANDS="${TELEGRAM_NATIVE_COMMANDS:-}"
-  TELEGRAM_AUTO_SELECT_FAMILY="${TELEGRAM_AUTO_SELECT_FAMILY:-false}"
   BROWSER_PLUGIN_MODE="${BROWSER_PLUGIN_MODE:-disabled}"
   # HF Spaces does not benefit from Bonjour discovery, and the retries add noise.
   export OPENCLAW_DISABLE_BONJOUR="${OPENCLAW_DISABLE_BONJOUR:-1}"
@@ -27,8 +25,6 @@ else
   OPENCLAW_CONSOLE_LOG_LEVEL="${OPENCLAW_CONSOLE_LOG_LEVEL:-info}"
   OPENCLAW_FILE_LOG_LEVEL="${OPENCLAW_FILE_LOG_LEVEL:-info}"
   OPENCLAW_CONSOLE_LOG_STYLE="${OPENCLAW_CONSOLE_LOG_STYLE:-pretty}"
-  TELEGRAM_NATIVE_COMMANDS="${TELEGRAM_NATIVE_COMMANDS:-auto}"
-  TELEGRAM_AUTO_SELECT_FAMILY="${TELEGRAM_AUTO_SELECT_FAMILY:-true}"
   BROWSER_PLUGIN_MODE="${BROWSER_PLUGIN_MODE:-auto}"
 fi
 echo ""
@@ -153,6 +149,15 @@ if [ -n "${HF_TOKEN:-}" ]; then
   python3 /home/node/app/workspace-sync.py restore || true
 else
   echo "HF_TOKEN is not set. Running without dataset persistence."
+fi
+
+CF_PROXY_ENV_FILE="/tmp/huggingclaw-cloudflare-proxy.env"
+if [ -n "${CLOUDFLARE_API_TOKEN:-}" ] || [ -n "${CLOUDFLARE_PROXY_URL:-}" ]; then
+  echo "☁️ Preparing Cloudflare outbound proxy..."
+  python3 /home/node/app/cloudflare-proxy-setup.py || true
+  if [ -f "$CF_PROXY_ENV_FILE" ]; then
+    . "$CF_PROXY_ENV_FILE"
+  fi
 fi
 
 # ── Build config ──
@@ -332,12 +337,7 @@ fi
 if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
   CONFIG_JSON=$(echo "$CONFIG_JSON" | jq '.plugins.entries.telegram = {"enabled": true}')
   export TELEGRAM_BOT_TOKEN="$TELEGRAM_BOT_TOKEN"
-  CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".channels.telegram.enabled = true")
-  CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".channels.telegram.botToken = \"$TELEGRAM_BOT_TOKEN\"")
-  CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".channels.telegram.commands.native = \"$TELEGRAM_NATIVE_COMMANDS\"")
-  CONFIG_JSON=$(echo "$CONFIG_JSON" | jq '.channels.telegram.timeoutSeconds = 60')
-  CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".channels.telegram.network.autoSelectFamily = ${TELEGRAM_AUTO_SELECT_FAMILY}")
-  CONFIG_JSON=$(echo "$CONFIG_JSON" | jq '.channels.telegram.retry = {"attempts": 5, "minDelayMs": 800, "maxDelayMs": 30000, "jitter": 0.2}')
+  CONFIG_JSON=$(echo "$CONFIG_JSON" | jq '.channels.telegram.enabled = true')
   
   if [ -n "${TELEGRAM_USER_IDS:-}" ]; then
     # Convert comma-separated IDs to JSON array
@@ -391,6 +391,9 @@ if [ -n "${HF_TOKEN:-}" ]; then
 printf "  │  %-40s │\n" "Backup: ✅ ${BACKUP_DATASET:-huggingclaw-backup} (auto namespace)"
 else
 printf "  │  %-40s │\n" "Backup: ❌ not configured"
+fi
+if [ -n "${CLOUDFLARE_PROXY_URL:-}" ]; then
+printf "  │  %-40s │\n" "Proxy: ☁️ ${CLOUDFLARE_PROXY_URL}"
 fi
 if [ -n "${OPENCLAW_PASSWORD:-}" ]; then
 printf "  │  %-40s │\n" "Auth: 🔑 password"

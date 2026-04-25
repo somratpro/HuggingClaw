@@ -63,13 +63,15 @@ RUN ln -s /home/node/.openclaw/openclaw-app/openclaw.mjs /usr/local/bin/openclaw
     npm install -g openclaw@${OPENCLAW_VERSION}
 
 # Copy HuggingClaw files
-COPY --chown=1000:1000 dns-fix.js /opt/dns-fix.js
+COPY --chown=1000:1000 cloudflare-proxy.js /opt/cloudflare-proxy.js
+COPY --chown=1000:1000 cloudflare-proxy-setup.py /home/node/app/cloudflare-proxy-setup.py
+COPY --chown=1000:1000 cloudflare-worker.js /home/node/app/cloudflare-worker.js
 COPY --chown=1000:1000 health-server.js /home/node/app/health-server.js
 COPY --chown=1000:1000 iframe-fix.cjs /home/node/app/iframe-fix.cjs
 COPY --chown=1000:1000 start.sh /home/node/app/start.sh
 COPY --chown=1000:1000 wa-guardian.js /home/node/app/wa-guardian.js
 COPY --chown=1000:1000 workspace-sync.py /home/node/app/workspace-sync.py
-RUN chmod +x /home/node/app/start.sh
+RUN chmod +x /home/node/app/start.sh /home/node/app/cloudflare-proxy-setup.py
 
 USER node
 
@@ -77,7 +79,7 @@ ENV HOME=/home/node \
     OPENCLAW_VERSION=${OPENCLAW_VERSION} \
     PATH=/home/node/.local/bin:/usr/local/bin:$PATH \
     NODE_PATH=/home/node/browser-deps/node_modules \
-    NODE_OPTIONS="--require /opt/dns-fix.js"
+    NODE_OPTIONS="--require /opt/cloudflare-proxy.js"
 
 WORKDIR /home/node/app
 

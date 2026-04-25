@@ -1,0 +1,202 @@
+#!/usr/bin/env python3
+
+import json
+import os
+import re
+import secrets
+import sys
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+API_BASE = "https://api.cloudflare.com/client/v4"
+ENV_FILE = Path("/tmp/huggingclaw-cloudflare-proxy.env")
+DEFAULT_ALLOWED = [
+    "api.telegram.org",
+    "web.whatsapp.com",
+]
+
+
+def cf_request(method: str, path: str, token: str, body: bytes | None = None, content_type: str = "application/json"):
+    req = urllib.request.Request(
+        f"{API_BASE}{path}",
+        data=body,
+        method=method,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": content_type,
+        },
+    )
+    with urllib.request.urlopen(req, timeout=30) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    if not payload.get("success"):
+        errors = payload.get("errors") or [{"message": "Unknown Cloudflare API error"}]
+        raise RuntimeError(errors[0].get("message", "Unknown Cloudflare API error"))
+    return payload["result"]
+
+
+def slugify(value: str) -> str:
+    cleaned = re.sub(r"[^a-z0-9-]+", "-", value.lower()).strip("-")
+    cleaned = re.sub(r"-{2,}", "-", cleaned)
+    if not cleaned:
+        cleaned = "huggingclaw-proxy"
+    return cleaned[:63].rstrip("-")
+
+
+def derive_worker_name() -> str:
+    explicit = os.environ.get("CLOUDFLARE_WORKER_NAME", "").strip()
+    if explicit:
+        return slugify(explicit)
+    space_host = os.environ.get("SPACE_HOST", "").strip()
+    if space_host:
+        base = space_host.replace(".hf.space", "")
+        return slugify(f"{base}-proxy")
+    return "huggingclaw-proxy"
+
+
+def render_worker(secret_value: str, allowed_targets: list[str], allow_proxy_all: bool) -> str:
+    allowed_json = json.dumps(allowed_targets)
+    allow_all_js = "true" if allow_proxy_all else "false"
+    secret_json = json.dumps(secret_value)
+    return f"""addEventListener("fetch", (event) => {{
+  event.respondWith(handleRequest(event.request));
+}});
+
+const PROXY_SHARED_SECRET = {secret_json};
+const ALLOW_PROXY_ALL = {allow_all_js};
+const ALLOWED_TARGETS = {allowed_json};
+
+function isAllowedHost(hostname) {{
+  const normalized = String(hostname || "").trim().toLowerCase();
+  if (!normalized) return false;
+  if (ALLOW_PROXY_ALL) return true;
+  return ALLOWED_TARGETS.some(
+    (domain) => normalized === domain || normalized.endsWith(`.${{domain}}`),
+  );
+}}
+
+async function handleRequest(request) {{
+  const url = new URL(request.url);
+  const targetHost = request.headers.get("x-target-host");
+
+  if (PROXY_SHARED_SECRET) {{
+    const providedSecret = request.headers.get("x-proxy-key") || "";
+    if (providedSecret !== PROXY_SHARED_SECRET) {{
+      return new Response("Unauthorized", {{ status: 401 }});
+    }}
+  }}
+
+  let targetBase = "";
+  if (targetHost) {{
+    if (!isAllowedHost(targetHost)) {{
+      return new Response("Target host is not allowed.", {{ status: 403 }});
+    }}
+    targetBase = `https://${{targetHost}}`;
+  }} else if (url.pathname.startsWith("/bot")) {{
+    targetBase = "https://api.telegram.org";
+  }} else {{
+    return new Response("Invalid request.", {{ status: 400 }});
+  }}
+
+  const targetUrl = targetBase + url.pathname + url.search;
+  const headers = new Headers(request.headers);
+  headers.delete("cf-connecting-ip");
+  headers.delete("cf-ray");
+  headers.delete("cf-visitor");
+  headers.delete("x-real-ip");
+  headers.delete("x-target-host");
+
+  const proxiedRequest = new Request(targetUrl, {{
+    method: request.method,
+    headers,
+    body: request.body,
+    redirect: "follow",
+  }});
+
+  try {{
+    return await fetch(proxiedRequest);
+  }} catch (error) {{
+    return new Response(`Proxy Error: ${{error.message}}`, {{ status: 502 }});
+  }}
+}}
+"""
+
+
+def write_env(proxy_url: str, proxy_secret: str) -> None:
+    ENV_FILE.write_text(
+        "\n".join(
+            [
+                f'export CLOUDFLARE_PROXY_URL="{proxy_url}"',
+                f'export CLOUDFLARE_PROXY_SECRET="{proxy_secret}"',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def main() -> int:
+    existing_url = os.environ.get("CLOUDFLARE_PROXY_URL", "").strip()
+    existing_secret = os.environ.get("CLOUDFLARE_PROXY_SECRET", "").strip()
+    api_token = os.environ.get("CLOUDFLARE_API_TOKEN", "").strip()
+
+    if existing_url:
+      if existing_secret:
+        write_env(existing_url, existing_secret)
+      print(f"☁️ Using configured Cloudflare proxy: {existing_url}")
+      return 0
+
+    if not api_token:
+        return 0
+
+    account_id = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "").strip()
+    try:
+        if not account_id:
+            accounts = cf_request("GET", "/accounts", api_token)
+            if not accounts:
+                raise RuntimeError("No Cloudflare account available for this token.")
+            account_id = accounts[0]["id"]
+
+        subdomain_info = cf_request(
+            "GET",
+            f"/accounts/{account_id}/workers/subdomain",
+            api_token,
+        )
+        subdomain = (subdomain_info or {}).get("subdomain", "").strip()
+        if not subdomain:
+            raise RuntimeError(
+                "Cloudflare Workers subdomain is not configured. Enable workers.dev in your Cloudflare account first."
+            )
+
+        worker_name = derive_worker_name()
+        allowed_raw = os.environ.get("CLOUDFLARE_PROXY_DOMAINS", "").strip()
+        allow_proxy_all = not allowed_raw or allowed_raw == "*"
+        allowed_targets = DEFAULT_ALLOWED if not allowed_raw or allow_proxy_all else [
+            value.strip() for value in allowed_raw.split(",") if value.strip()
+        ]
+        proxy_secret = existing_secret or secrets.token_urlsafe(24)
+        worker_source = render_worker(proxy_secret, allowed_targets, allow_proxy_all)
+
+        cf_request(
+            "PUT",
+            f"/accounts/{account_id}/workers/scripts/{worker_name}",
+            api_token,
+            body=worker_source.encode("utf-8"),
+            content_type="application/javascript",
+        )
+
+        proxy_url = f"https://{worker_name}.{subdomain}.workers.dev"
+        write_env(proxy_url, proxy_secret)
+        print(f"☁️ Cloudflare proxy ready: {proxy_url}")
+        return 0
+    except urllib.error.HTTPError as error:
+        detail = error.read().decode("utf-8", errors="replace")
+        print(f"☁️ Cloudflare proxy setup failed: HTTP {error.code} {detail}")
+        return 1
+    except Exception as error:
+        print(f"☁️ Cloudflare proxy setup failed: {error}")
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

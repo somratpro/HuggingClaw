@@ -14,6 +14,8 @@ secrets:
     description: The model ID to use, e.g. openai/gpt-4o or google/gemini-2.5-flash.
   - name: GATEWAY_TOKEN
     description: A strong password or token to secure your OpenClaw Control UI.
+  - name: CLOUDFLARE_API_TOKEN
+    description: Optional Cloudflare API token for automatic outbound proxy setup.
 ---
 
 <!-- Badges -->
@@ -30,6 +32,7 @@ secrets:
 - [🎥 Video Tutorial](#-video-tutorial)
 - [🚀 Quick Start](#-quick-start)
 - [📱 Telegram Setup *(Optional)*](#-telegram-setup-optional)
+- [🌐 Cloudflare Proxy *(Optional)*](#-cloudflare-proxy-optional)
 - [💬 WhatsApp Setup *(Optional)*](#-whatsapp-setup-optional)
 - [💾 Workspace Backup *(Optional)*](#-workspace-backup-optional)
 - [🔔 Webhooks *(Optional)*](#-webhooks-optional)
@@ -49,7 +52,7 @@ secrets:
 - 🔌 **Any LLM:** Use Claude, OpenAI GPT, Google Gemini, Grok, DeepSeek, Qwen, and 40+ providers (set `LLM_API_KEY` and `LLM_MODEL` accordingly).
 - ⚡ **Zero Config:** Duplicate this Space and set **just three** secrets (LLM_API_KEY, LLM_MODEL, GATEWAY_TOKEN) – no other setup needed.
 - 🐳 **Fast Builds:** Uses a pre-built OpenClaw Docker image to deploy in minutes.
-- 🌐 **Built-In Browser:** Headless Chromium is included in the Space, so browser actions work from the start.
+- 🌐 **Cloudflare Outbound Proxy:** HuggingClaw can automatically provision a Cloudflare Worker proxy for blocked outbound traffic such as Telegram API requests.
 - 💾 **Workspace Backup:** Chats, settings, and WhatsApp session state sync to a private HF Dataset via the `huggingface_hub`, preserving data automatically without storing your HF token in a git remote.
 - ⏰ **External Keep-Alive:** Set up a one-time UptimeRobot monitor from the dashboard to help keep free HF Spaces awake.
 - 👥 **Multi-User Messaging:** Support for Telegram (multi-user) and WhatsApp (pairing).
@@ -102,13 +105,52 @@ To chat via Telegram:
 
 1. Create a bot via [@BotFather](https://t.me/BotFather): send `/newbot`, follow prompts, and copy the bot token.
 2. Find your Telegram user ID with [@userinfobot](https://t.me/userinfobot).
-3. Add these secrets in Settings → Secrets. After restarting, the bot should appear online on Telegram.
+3. Add `CLOUDFLARE_API_TOKEN` in Space secrets to let HuggingClaw auto-provision the outbound proxy, or set `CLOUDFLARE_PROXY_URL` manually if you already have a Worker.
+4. Add these secrets in Settings → Secrets. After restarting, the bot should appear online on Telegram.
 
 | Variable | Default | Description |
 | :--- | :--- | :--- |
 | `TELEGRAM_BOT_TOKEN` | — | Telegram bot token from BotFather |
 | `TELEGRAM_USER_ID` | — | Single Telegram user ID allowlist |
 | `TELEGRAM_USER_IDS` | — | Comma-separated Telegram user IDs for team access |
+
+## 🌐 Cloudflare Proxy *(Optional)*
+
+Hugging Face Spaces sometimes blocks outgoing connections to Telegram, WhatsApp-related APIs, Google integrations, and other external services. HuggingClaw includes the same transparent Cloudflare proxy approach used in Hugging8n.
+
+Automatic setup:
+
+1. Create a Cloudflare API token with Workers edit permissions.
+2. Add `CLOUDFLARE_API_TOKEN` as a Space secret.
+3. Restart the Space.
+
+HuggingClaw will:
+
+- create or update a Worker named from your Space host
+- generate a private shared secret automatically
+- export `CLOUDFLARE_PROXY_URL` and `CLOUDFLARE_PROXY_SECRET` before OpenClaw starts
+- transparently proxy outbound external requests through Cloudflare by default
+
+Default behavior:
+
+- `CLOUDFLARE_PROXY_DOMAINS=*`
+- all external traffic is proxied
+- Hugging Face internal hosts stay direct automatically
+
+That wider default is intentional so Telegram, WhatsApp-related APIs, Google integrations, and other external providers work without extra domain tuning.
+
+Optional variables:
+
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `CLOUDFLARE_API_TOKEN` | — | Cloudflare API token for automatic Worker setup |
+| `CLOUDFLARE_ACCOUNT_ID` | auto | Optional Cloudflare account override |
+| `CLOUDFLARE_WORKER_NAME` | derived from Space host | Optional Worker script name |
+| `CLOUDFLARE_PROXY_URL` | auto | Use an existing Worker URL instead of auto-provisioning |
+| `CLOUDFLARE_PROXY_SECRET` | auto | Optional shared secret override |
+| `CLOUDFLARE_PROXY_DOMAINS` | `*` | Comma-separated proxied domains or `*` for all external traffic |
+
+Manual setup is also available with [cloudflare-worker.js](/Users/somrat/Development/hf-space/HuggingClaw/cloudflare-worker.js) if you prefer to deploy the Worker yourself.
 
 ## 💬 WhatsApp Setup *(Optional)*
 
@@ -293,7 +335,7 @@ HuggingClaw/
 ├── start.sh            # Config generator, validator, and orchestrator
 ├── workspace-sync.py   # Syncs workspace/state to HF Datasets via huggingface_hub
 ├── health-server.js    # /health endpoint for uptime checks
-├── dns-fix.js          # DNS-over-HTTPS fallback (for blocked domains)
+├── cloudflare-proxy.js # Transparent outbound proxy for blocked domains
 ├── .env.example        # Environment variable reference
 └── README.md           # (this file)
 
