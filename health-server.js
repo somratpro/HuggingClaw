@@ -80,6 +80,14 @@ function mapAppProxyPath(path) {
   return path;
 }
 
+function sanitizeAppProxySearch(parsedUrl) {
+  const filtered = new URLSearchParams(parsedUrl.searchParams);
+  // HF Space UI sometimes appends its own control params to deep links.
+  filtered.delete("logs");
+  const query = filtered.toString();
+  return query ? `?${query}` : "";
+}
+
 function appendForwarded(existingValue, nextValue) {
   const cleanNext = nextValue || "";
   if (!existingValue) return cleanNext;
@@ -998,6 +1006,7 @@ async function createUptimeRobotMonitor(apiKey, host) {
 
 function proxyHttp(req, res, proxyPath = req.url, proxyPort = GATEWAY_PORT) {
   const clientIp = getForwardedClientIp(req);
+  let upstreamStarted = false;
   const proxyReq = http.request(
     {
       hostname: GATEWAY_HOST,
@@ -1007,12 +1016,18 @@ function proxyHttp(req, res, proxyPath = req.url, proxyPort = GATEWAY_PORT) {
       headers: buildProxyHeaders(req.headers, clientIp),
     },
     (proxyRes) => {
+      upstreamStarted = true;
       res.writeHead(proxyRes.statusCode || 502, proxyRes.headers);
       proxyRes.pipe(res);
     },
   );
 
   proxyReq.on("error", (error) => {
+    if (res.headersSent || upstreamStarted) {
+      res.destroy();
+      return;
+    }
+
     res.writeHead(502, { "Content-Type": "application/json" });
     res.end(
       JSON.stringify({
@@ -1021,6 +1036,10 @@ function proxyHttp(req, res, proxyPath = req.url, proxyPort = GATEWAY_PORT) {
         detail: error.message,
       }),
     );
+  });
+
+  res.on("close", () => {
+    proxyReq.destroy();
   });
 
   req.pipe(proxyReq);
@@ -1225,7 +1244,7 @@ const server = http.createServer((req, res) => {
   }
 
   if (isDashboardAppRoute(pathname) || isAppRoute(pathname)) {
-    const proxyPath = mapAppProxyPath(pathname) + (parsedUrl.search || "");
+    const proxyPath = mapAppProxyPath(pathname) + sanitizeAppProxySearch(parsedUrl);
     proxyHttp(req, res, proxyPath, GATEWAY_PORT);
     return;
   }
@@ -1242,7 +1261,7 @@ server.on("upgrade", (req, socket, head) => {
 
   if (isDashboardAppRoute(pathname) || isAppRoute(pathname)) {
     const parsedUrl = parseRequestUrl(req.url || "/");
-    const proxyPath = mapAppProxyPath(pathname) + (parsedUrl.search || "");
+    const proxyPath = mapAppProxyPath(pathname) + sanitizeAppProxySearch(parsedUrl);
     proxyUpgrade(req, socket, head, proxyPath, GATEWAY_PORT);
     return;
   }
