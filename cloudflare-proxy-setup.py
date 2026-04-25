@@ -103,6 +103,7 @@ async function handleRequest(request) {{
   headers.delete("cf-connecting-ip");
   headers.delete("cf-ray");
   headers.delete("cf-visitor");
+  headers.delete("host");
   headers.delete("x-real-ip");
   headers.delete("x-target-host");
 

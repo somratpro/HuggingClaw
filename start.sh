@@ -19,6 +19,7 @@ if [ -n "${SPACE_HOST:-}" ]; then
   OPENCLAW_FILE_LOG_LEVEL="${OPENCLAW_FILE_LOG_LEVEL:-info}"
   OPENCLAW_CONSOLE_LOG_STYLE="${OPENCLAW_CONSOLE_LOG_STYLE:-compact}"
   BROWSER_PLUGIN_MODE="${BROWSER_PLUGIN_MODE:-disabled}"
+  ACP_PLUGIN_MODE="${ACP_PLUGIN_MODE:-disabled}"
   # HF Spaces does not benefit from Bonjour discovery, and the retries add noise.
   export OPENCLAW_DISABLE_BONJOUR="${OPENCLAW_DISABLE_BONJOUR:-1}"
 else
@@ -26,6 +27,7 @@ else
   OPENCLAW_FILE_LOG_LEVEL="${OPENCLAW_FILE_LOG_LEVEL:-info}"
   OPENCLAW_CONSOLE_LOG_STYLE="${OPENCLAW_CONSOLE_LOG_STYLE:-pretty}"
   BROWSER_PLUGIN_MODE="${BROWSER_PLUGIN_MODE:-auto}"
+  ACP_PLUGIN_MODE="${ACP_PLUGIN_MODE:-auto}"
 fi
 echo ""
 echo "  ╔══════════════════════════════════════════╗"
@@ -280,7 +282,10 @@ elif [ "$BROWSER_PLUGIN_MODE" = "auto" ] && [ -n "$BROWSER_EXECUTABLE_PATH" ] &&
 fi
 
 # Restrict bundled plugin loading on HF Spaces so unrelated broken plugins do not crash the gateway after startup.
-PLUGIN_ALLOW_JSON='["acpx","device-pair","phone-control","talk-voice"]'
+PLUGIN_ALLOW_JSON='["device-pair","phone-control","talk-voice"]'
+if [ "$ACP_PLUGIN_MODE" = "enabled" ] || [ "$ACP_PLUGIN_MODE" = "auto" ]; then
+  PLUGIN_ALLOW_JSON=$(jq '. + ["acpx"]' <<<"$PLUGIN_ALLOW_JSON")
+fi
 if [ "$BROWSER_SHOULD_ENABLE" = "true" ]; then
   PLUGIN_ALLOW_JSON=$(jq '. + ["browser"]' <<<"$PLUGIN_ALLOW_JSON")
 fi
@@ -293,6 +298,14 @@ fi
 CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".plugins.allow = $PLUGIN_ALLOW_JSON")
 CONFIG_JSON=$(echo "$CONFIG_JSON" | jq '.plugins.deny = ["lmstudio","xai"]')
 CONFIG_JSON=$(echo "$CONFIG_JSON" | jq '.plugins.entries.lmstudio.enabled = false | .plugins.entries.xai.enabled = false')
+
+if [ "$ACP_PLUGIN_MODE" = "disabled" ]; then
+  CONFIG_JSON=$(echo "$CONFIG_JSON" | jq '.plugins.entries.acpx.enabled = false')
+fi
+
+if [ "$BROWSER_SHOULD_ENABLE" != "true" ]; then
+  CONFIG_JSON=$(echo "$CONFIG_JSON" | jq '.plugins.entries.browser.enabled = false | .browser.enabled = false')
+fi
 
 if [ "$BROWSER_SHOULD_ENABLE" = "true" ]; then
   CONFIG_JSON=$(echo "$CONFIG_JSON" | jq \
