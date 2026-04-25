@@ -18,12 +18,14 @@ if [ -n "${SPACE_HOST:-}" ]; then
   OPENCLAW_CONSOLE_LOG_LEVEL="${OPENCLAW_CONSOLE_LOG_LEVEL:-warn}"
   OPENCLAW_FILE_LOG_LEVEL="${OPENCLAW_FILE_LOG_LEVEL:-info}"
   OPENCLAW_CONSOLE_LOG_STYLE="${OPENCLAW_CONSOLE_LOG_STYLE:-compact}"
+  TELEGRAM_NATIVE_COMMANDS="${TELEGRAM_NATIVE_COMMANDS:-}"
   # HF Spaces does not benefit from Bonjour discovery, and the retries add noise.
   export OPENCLAW_DISABLE_BONJOUR="${OPENCLAW_DISABLE_BONJOUR:-1}"
 else
   OPENCLAW_CONSOLE_LOG_LEVEL="${OPENCLAW_CONSOLE_LOG_LEVEL:-info}"
   OPENCLAW_FILE_LOG_LEVEL="${OPENCLAW_FILE_LOG_LEVEL:-info}"
   OPENCLAW_CONSOLE_LOG_STYLE="${OPENCLAW_CONSOLE_LOG_STYLE:-pretty}"
+  TELEGRAM_NATIVE_COMMANDS="${TELEGRAM_NATIVE_COMMANDS:-auto}"
 fi
 echo ""
 echo "  ╔══════════════════════════════════════════╗"
@@ -324,14 +326,16 @@ fi
 if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
   CONFIG_JSON=$(echo "$CONFIG_JSON" | jq '.plugins.entries.telegram = {"enabled": true}')
   export TELEGRAM_BOT_TOKEN="$TELEGRAM_BOT_TOKEN"
+  CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".channels.telegram.enabled = true")
+  CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".channels.telegram.commands.native = \"$TELEGRAM_NATIVE_COMMANDS\"")
   
   if [ -n "${TELEGRAM_USER_IDS:-}" ]; then
     # Convert comma-separated IDs to JSON array
     IDS_JSON=$(echo "$TELEGRAM_USER_IDS" | tr ',' '\n' | sed 's/^ *//;s/ *$//' | jq -R . | jq -s .)
-    CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".channels.telegram = {\"dmPolicy\": \"allowlist\", \"allowFrom\": $IDS_JSON}")
+    CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".channels.telegram += {\"dmPolicy\": \"allowlist\", \"allowFrom\": $IDS_JSON}")
   elif [ -n "${TELEGRAM_USER_ID:-}" ]; then
     # Single user (backward compatible)
-    CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".channels.telegram = {\"dmPolicy\": \"allowlist\", \"allowFrom\": [\"$TELEGRAM_USER_ID\"]}")
+    CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".channels.telegram += {\"dmPolicy\": \"allowlist\", \"allowFrom\": [\"$TELEGRAM_USER_ID\"]}")
   fi
 fi
 
