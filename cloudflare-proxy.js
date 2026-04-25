@@ -46,18 +46,21 @@ if (PROXY_URL) {
       const isInternal =
         normalized === "localhost" ||
         normalized === "127.0.0.1" ||
+        normalized === "::1" ||
+        normalized === "0.0.0.0" ||
         normalized.endsWith(".hf.space") ||
         normalized.endsWith(".huggingface.co") ||
         normalized === "huggingface.co";
 
-      if (PROXY_ALL) {
-        return !isInternal;
-      }
-
-      return BLOCKED_DOMAINS.some(
-        (domain) =>
-          normalized === domain || normalized.endsWith(`.${domain}`),
+      const should = PROXY_ALL ? !isInternal : BLOCKED_DOMAINS.some(
+        (domain) => normalized === domain || normalized.endsWith(`.${domain}`)
       );
+      
+      if (DEBUG && should && normalized !== proxy.hostname) {
+        log(`[cloudflare-proxy] Host match: ${normalized}`);
+      }
+      
+      return should;
     };
 
     const patch = (original, originalModuleName) => {
@@ -74,7 +77,7 @@ if (PROXY_URL) {
           hostname = options.hostname;
           path = options.pathname + options.search;
           headers = options.headers || {};
-        } else {
+        } else if (options && typeof options === "object") {
           hostname =
             options.hostname ||
             (options.host ? String(options.host).split(":")[0] : "");
