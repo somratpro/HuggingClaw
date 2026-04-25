@@ -153,8 +153,11 @@ else
   echo "HF_TOKEN is not set. Running without dataset persistence."
 fi
 
+CLOUDFLARE_WORKERS_TOKEN="${CLOUDFLARE_WORKERS_TOKEN:-${CLOUDFLARE_API_TOKEN:-}}"
+export CLOUDFLARE_WORKERS_TOKEN
 CF_PROXY_ENV_FILE="/tmp/huggingclaw-cloudflare-proxy.env"
 if [ -n "${CLOUDFLARE_WORKERS_TOKEN:-}" ] || [ -n "${CLOUDFLARE_PROXY_URL:-}" ]; then
+  export CLOUDFLARE_PROXY_DOMAINS="${CLOUDFLARE_PROXY_DOMAINS:-api.telegram.org,web.whatsapp.com}"
   echo "☁️ Preparing Cloudflare outbound proxy..."
   python3 /home/node/app/cloudflare-proxy-setup.py || true
   if [ -f "$CF_PROXY_ENV_FILE" ]; then
@@ -350,7 +353,22 @@ fi
 if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
   CONFIG_JSON=$(echo "$CONFIG_JSON" | jq '.plugins.entries.telegram = {"enabled": true}')
   export TELEGRAM_BOT_TOKEN="$TELEGRAM_BOT_TOKEN"
-  CONFIG_JSON=$(echo "$CONFIG_JSON" | jq '.channels.telegram.enabled = true')
+  export OPENCLAW_TELEGRAM_DISABLE_AUTO_SELECT_FAMILY=1
+  export OPENCLAW_TELEGRAM_DNS_RESULT_ORDER=ipv4first
+  CONFIG_JSON=$(echo "$CONFIG_JSON" | jq --arg token "$TELEGRAM_BOT_TOKEN" '
+    .channels.telegram.enabled = true
+    | .channels.telegram.botToken = $token
+    | .channels.telegram.commands.native = false
+    | .channels.telegram.timeoutSeconds = 60
+    | .channels.telegram.network.autoSelectFamily = false
+    | .channels.telegram.network.dnsResultOrder = "ipv4first"
+    | .channels.telegram.retry = {
+        "attempts": 5,
+        "minDelayMs": 800,
+        "maxDelayMs": 30000,
+        "jitter": 0.2
+      }
+  ')
   
   if [ -n "${TELEGRAM_USER_IDS:-}" ]; then
     # Convert comma-separated IDs to JSON array
