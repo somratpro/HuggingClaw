@@ -14,6 +14,12 @@ OPENCLAW_RUNTIME_VERSION=""
 WHATSAPP_ENABLED="${WHATSAPP_ENABLED:-false}"
 WHATSAPP_ENABLED_NORMALIZED=$(printf '%s' "$WHATSAPP_ENABLED" | tr '[:upper:]' '[:lower:]')
 SYNC_INTERVAL="${SYNC_INTERVAL:-180}"
+OPENCLAW_CONSOLE_LOG_LEVEL="${OPENCLAW_CONSOLE_LOG_LEVEL:-warn}"
+OPENCLAW_FILE_LOG_LEVEL="${OPENCLAW_FILE_LOG_LEVEL:-info}"
+OPENCLAW_CONSOLE_LOG_STYLE="${OPENCLAW_CONSOLE_LOG_STYLE:-compact}"
+
+# HF Spaces does not benefit from Bonjour discovery, and the retries add noise.
+export OPENCLAW_DISABLE_BONJOUR="${OPENCLAW_DISABLE_BONJOUR:-1}"
 echo ""
 echo "  ╔══════════════════════════════════════════╗"
 echo "  ║          🦞 HuggingClaw Gateway          ║"
@@ -157,6 +163,11 @@ CONFIG_JSON=$(cat <<'CONFIGEOF'
   "channels": {},
   "plugins": {
     "entries": {}
+  },
+  "logging": {
+    "level": "info",
+    "consoleLevel": "warn",
+    "consoleStyle": "compact"
   }
 }
 CONFIGEOF
@@ -167,6 +178,7 @@ CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".gateway.auth.token = \"$GATEWAY_TOKEN\"
 
 # Model configuration at top level
 CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".agents.defaults.model = \"$LLM_MODEL\"")
+CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".logging.level = \"$OPENCLAW_FILE_LOG_LEVEL\" | .logging.consoleLevel = \"$OPENCLAW_CONSOLE_LOG_LEVEL\" | .logging.consoleStyle = \"$OPENCLAW_CONSOLE_LOG_STYLE\"")
 
 # Optional: dynamic custom OpenAI-compatible provider registration
 CUSTOM_PROVIDER_NAME="${CUSTOM_PROVIDER_NAME:-}"
