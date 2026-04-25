@@ -278,6 +278,7 @@ if [ "$WHATSAPP_ENABLED_NORMALIZED" = "true" ]; then
   PLUGIN_ALLOW_JSON=$(jq '. + ["whatsapp"]' <<<"$PLUGIN_ALLOW_JSON")
 fi
 CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".plugins.allow = $PLUGIN_ALLOW_JSON")
+CONFIG_JSON=$(echo "$CONFIG_JSON" | jq '.plugins.deny = ["lmstudio","xai"]')
 CONFIG_JSON=$(echo "$CONFIG_JSON" | jq '.plugins.entries.lmstudio.enabled = false | .plugins.entries.xai.enabled = false')
 
 if [ "$BROWSER_SHOULD_ENABLE" = "true" ]; then
