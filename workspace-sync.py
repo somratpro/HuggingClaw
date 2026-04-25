@@ -122,6 +122,13 @@ def restore_embedded_state() -> None:
         print("🧠 Restoring OpenClaw state...")
         for source_path in state_backup_root.iterdir():
             name = source_path.name
+            if name in EXCLUDED_STATE_NAMES:
+                if source_path.is_dir():
+                    shutil.rmtree(source_path, ignore_errors=True)
+                else:
+                    source_path.unlink(missing_ok=True)
+                print(f"  ↷ Skipping stale backup entry: {name}")
+                continue
             target_path = OPENCLAW_HOME / name
             shutil.rmtree(target_path, ignore_errors=True)
             if target_path.is_file():
