@@ -185,6 +185,12 @@ def main() -> int:
             body=worker_source.encode("utf-8"),
             content_type="application/javascript",
         )
+        cf_request(
+            "POST",
+            f"/accounts/{account_id}/workers/scripts/{worker_name}/subdomain",
+            api_token,
+            body=json.dumps({"enabled": True, "previews_enabled": True}).encode("utf-8"),
+        )
 
         proxy_url = f"https://{worker_name}.{subdomain}.workers.dev"
         write_env(proxy_url, proxy_secret)
