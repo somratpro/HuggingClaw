@@ -33,6 +33,29 @@ if (PROXY_URL) {
     const proxy = new URL(PROXY_URL);
     const originalHttpsRequest = https.request;
     const originalHttpRequest = http.request;
+    const originalFetch =
+      typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : null;
+
+    const shouldProxyHost = (hostname) => {
+      const normalized = String(hostname || "").trim().toLowerCase();
+      if (!normalized) return false;
+
+      const isInternal =
+        normalized === "localhost" ||
+        normalized === "127.0.0.1" ||
+        normalized.endsWith(".hf.space") ||
+        normalized.endsWith(".huggingface.co") ||
+        normalized === "huggingface.co";
+
+      if (PROXY_ALL) {
+        return !isInternal;
+      }
+
+      return BLOCKED_DOMAINS.some(
+        (domain) =>
+          normalized === domain || normalized.endsWith(`.${domain}`),
+      );
+    };
 
     const patch = (original, originalModuleName) => {
       return function patchedRequest(options, callback) {
@@ -56,21 +79,7 @@ if (PROXY_URL) {
           headers = options.headers || {};
         }
 
-        const isInternal =
-          hostname === "localhost" ||
-          hostname === "127.0.0.1" ||
-          hostname.endsWith(".hf.space") ||
-          hostname.endsWith(".huggingface.co") ||
-          hostname === "huggingface.co";
-
-        let shouldProxy = false;
-        if (PROXY_ALL) {
-          shouldProxy = !isInternal;
-        } else {
-          shouldProxy = BLOCKED_DOMAINS.some(
-            (domain) => hostname === domain || hostname.endsWith(`.${domain}`),
-          );
-        }
+        const shouldProxy = shouldProxyHost(hostname);
 
         const alreadyProxied =
           options && typeof options === "object" && options._proxied;
@@ -117,6 +126,58 @@ if (PROXY_URL) {
 
     https.request = patch(originalHttpsRequest, "https");
     http.request = patch(originalHttpRequest, "http");
+
+    if (originalFetch) {
+      globalThis.fetch = async function patchedFetch(input, init) {
+        const request = input instanceof Request ? input : null;
+        const url =
+          request
+            ? new URL(request.url)
+            : input instanceof URL
+              ? input
+              : new URL(String(input));
+
+        const hostname = url.hostname;
+        const shouldProxy = shouldProxyHost(hostname);
+        const headers = new Headers(request ? request.headers : init?.headers || {});
+        const alreadyProxied =
+          headers.has("x-target-host") || headers.has("X-Target-Host");
+
+        if (!shouldProxy || alreadyProxied) {
+          return originalFetch(input, init);
+        }
+
+        if (DEBUG) {
+          console.log(
+            `[cloudflare-proxy] Redirecting fetch://${hostname}${url.pathname}${url.search} -> ${proxy.hostname}`,
+          );
+        }
+
+        headers.set("x-target-host", hostname);
+        if (PROXY_SHARED_SECRET) {
+          headers.set("x-proxy-key", PROXY_SHARED_SECRET);
+        }
+
+        const proxiedUrl = new URL(url.pathname + url.search, proxy);
+
+        if (request) {
+          return originalFetch(
+            new Request(proxiedUrl, {
+              method: request.method,
+              headers,
+              body: request.body,
+              redirect: request.redirect,
+              duplex: "half",
+            }),
+          );
+        }
+
+        return originalFetch(proxiedUrl, {
+          ...init,
+          headers,
+        });
+      };
+    }
 
     if (DEBUG) {
       if (PROXY_ALL) {
