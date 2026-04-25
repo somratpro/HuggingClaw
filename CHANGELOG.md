@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.0] - 2026-04-25
+
+### Added
+
+- **Custom OpenAI-compatible provider registration** — HuggingClaw can now register a custom provider at startup with `CUSTOM_PROVIDER_NAME`, `CUSTOM_BASE_URL`, and `CUSTOM_MODEL_ID`, so you can point `LLM_MODEL` at your own OpenAI-compatible endpoint without modifying the OpenClaw CLI
+
+### Changed
+
+- **HF backup flow simplified** — HuggingClaw now uses `huggingface_hub` directly for restore and sync, matching the safer dataset-based pattern used in Hugging8n
+- **HF username no longer required in most cases** — backup namespace resolution now works from `HF_USERNAME`, `SPACE_AUTHOR_NAME`, or the authenticated HF token, so `HF_TOKEN` is usually enough on its own
+- **Startup restore path modernized** — startup now restores workspace and hidden state through `workspace-sync.py restore` instead of configuring a token-bearing git remote
+- **README refreshed for the new backup model** — documentation now describes token-only backup setup, the removed git sync assumptions, and the hardened dashboard helper behavior
+
+### Fixed
+
+- **HF token exposure risk in git remotes** — removed the old authenticated remote URL pattern that could leave `HF_TOKEN` embedded in workspace git configuration
+- **Backup status detection mismatch** — dashboard and startup summary now treat backup as enabled when `HF_TOKEN` is present, which matches the new auto-namespace flow
+- **UptimeRobot setup hardening gap** — dashboard setup now supports explicit enable/disable control, request rate limiting, origin validation, and earlier API-key validation
+
 ## [1.3.0] - 2026-04-04
 
 ### Added

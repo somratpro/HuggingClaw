@@ -12,7 +12,7 @@ const LLM_MODEL = process.env.LLM_MODEL || "Not Set";
 const TELEGRAM_ENABLED = !!process.env.TELEGRAM_BOT_TOKEN;
 const WHATSAPP_ENABLED = /^true$/i.test(process.env.WHATSAPP_ENABLED || "");
 const WHATSAPP_STATUS_FILE = "/tmp/huggingclaw-wa-status.json";
-const HF_BACKUP_ENABLED = !!(process.env.HF_USERNAME && process.env.HF_TOKEN);
+const HF_BACKUP_ENABLED = !!process.env.HF_TOKEN;
 const SYNC_INTERVAL = process.env.SYNC_INTERVAL || "600";
 const DASHBOARD_BASE = "/dashboard";
 const DASHBOARD_STATUS_PATH = `${DASHBOARD_BASE}/status`;
@@ -20,8 +20,16 @@ const DASHBOARD_HEALTH_PATH = `${DASHBOARD_BASE}/health`;
 const DASHBOARD_UPTIMEROBOT_PATH = `${DASHBOARD_BASE}/uptimerobot/setup`;
 const DASHBOARD_APP_BASE = `${DASHBOARD_BASE}/app`;
 const APP_BASE = "/app";
+const UPTIMEROBOT_SETUP_ENABLED =
+  String(process.env.UPTIMEROBOT_SETUP_ENABLED || "true").toLowerCase() ===
+  "true";
+const UPTIMEROBOT_RATE_WINDOW_MS = 60 * 1000;
+const UPTIMEROBOT_RATE_MAX = Number(
+  process.env.UPTIMEROBOT_RATE_LIMIT_PER_MINUTE || 5,
+);
 const SPACE_VISIBILITY_TTL_MS = 10 * 60 * 1000;
 const spaceVisibilityCache = new Map();
+const uptimerobotRateMap = new Map();
 
 function parseRequestUrl(url) {
   try {
@@ -80,17 +88,57 @@ function appendForwarded(existingValue, nextValue) {
   return `${existingValue}, ${cleanNext}`;
 }
 
+function getForwardedClientIp(req) {
+  const forwardedFor = req.headers["x-forwarded-for"];
+  if (Array.isArray(forwardedFor) && forwardedFor.length > 0) {
+    return String(forwardedFor[0]).split(",")[0].trim();
+  }
+  if (typeof forwardedFor === "string" && forwardedFor.trim()) {
+    return forwardedFor.split(",")[0].trim();
+  }
+  return req.socket.remoteAddress || "";
+}
+
 function buildProxyHeaders(headers, remoteAddress) {
   return {
     ...headers,
-    host: headers.host || `${GATEWAY_HOST}:${GATEWAY_PORT}`,
-    "x-forwarded-for": appendForwarded(
-      headers["x-forwarded-for"],
-      remoteAddress,
-    ),
-    "x-forwarded-host": headers["x-forwarded-host"] || headers.host || "",
+    host: `${GATEWAY_HOST}:${GATEWAY_PORT}`,
+    "x-forwarded-for": remoteAddress || "",
+    "x-forwarded-host": headers.host || "",
     "x-forwarded-proto": headers["x-forwarded-proto"] || "https",
   };
+}
+
+function getRequesterIp(req) {
+  return (
+    getForwardedClientIp(req) ||
+    req.socket.remoteAddress ||
+    "unknown"
+  );
+}
+
+function isRateLimited(req) {
+  const now = Date.now();
+  const ip = getRequesterIp(req);
+  const bucket = uptimerobotRateMap.get(ip) || [];
+  const recent = bucket.filter((ts) => now - ts < UPTIMEROBOT_RATE_WINDOW_MS);
+  recent.push(now);
+  uptimerobotRateMap.set(ip, recent);
+  return recent.length > UPTIMEROBOT_RATE_MAX;
+}
+
+function isAllowedUptimeSetupOrigin(req) {
+  const host = String(req.headers.host || "").toLowerCase();
+  const origin = String(req.headers.origin || "").toLowerCase();
+  const referer = String(req.headers.referer || "").toLowerCase();
+  if (!host) return false;
+  if (origin && !origin.includes(host)) return false;
+  if (referer && !referer.includes(host)) return false;
+  return true;
+}
+
+function isValidUptimeApiKey(key) {
+  return /^[A-Za-z0-9_-]{20,128}$/.test(String(key || ""));
 }
 
 function readSyncStatus() {
@@ -231,7 +279,13 @@ function renderSyncBadge(syncData) {
 
 function renderDashboard(initialData) {
   const controlUiHref = `${APP_BASE}/`;
-  const keepAwakeHtml = initialData.spacePrivate
+  const keepAwakeHtml = !UPTIMEROBOT_SETUP_ENABLED
+    ? `
+            <div id="uptimerobot-private-note" class="helper-summary">
+                UptimeRobot setup is disabled for this Space.
+            </div>
+        `
+    : initialData.spacePrivate
     ? `
             <div id="uptimerobot-private-note" class="helper-summary">
                 <strong>This Space is private.</strong> External monitors cannot reliably access private HF health URLs, so keep-awake setup is only available on public Spaces.
@@ -739,6 +793,7 @@ function renderDashboard(initialData) {
 
         const monitorStateKey = 'huggingclaw_uptimerobot_setup_v1';
         const KEEP_AWAKE_PRIVATE = ${initialData.spacePrivate ? "true" : "false"};
+        const KEEP_AWAKE_SETUP_ENABLED = ${UPTIMEROBOT_SETUP_ENABLED ? "true" : "false"};
 
         function setMonitorUiState(isConfigured) {
             const summary = document.getElementById('uptimerobot-summary');
@@ -824,7 +879,7 @@ function renderDashboard(initialData) {
         updateStats();
         setInterval(updateStats, 10000);
         document.getElementById('control-ui-link').setAttribute('href', getDashboardBase() + '/app/' + getCurrentSearch());
-        if (!KEEP_AWAKE_PRIVATE) {
+        if (KEEP_AWAKE_SETUP_ENABLED && !KEEP_AWAKE_PRIVATE) {
             restoreMonitorUiState();
             document.getElementById('uptimerobot-btn').addEventListener('click', setupUptimeRobot);
             document.getElementById('uptimerobot-toggle').addEventListener('click', toggleMonitorSetup);
@@ -942,13 +997,14 @@ async function createUptimeRobotMonitor(apiKey, host) {
 }
 
 function proxyHttp(req, res, proxyPath = req.url, proxyPort = GATEWAY_PORT) {
+  const clientIp = getForwardedClientIp(req);
   const proxyReq = http.request(
     {
       hostname: GATEWAY_HOST,
       port: proxyPort,
       method: req.method,
       path: proxyPath,
-      headers: buildProxyHeaders(req.headers, req.socket.remoteAddress),
+      headers: buildProxyHeaders(req.headers, clientIp),
     },
     (proxyRes) => {
       res.writeHead(proxyRes.statusCode || 502, proxyRes.headers);
@@ -970,7 +1026,7 @@ function proxyHttp(req, res, proxyPath = req.url, proxyPort = GATEWAY_PORT) {
   req.pipe(proxyReq);
 }
 
-function serializeUpgradeHeaders(req, remoteAddress) {
+function serializeUpgradeHeaders(req, clientIp, proxyPort) {
   const forwardedHeaders = [];
 
   for (let i = 0; i < req.rawHeaders.length; i += 2) {
@@ -979,6 +1035,7 @@ function serializeUpgradeHeaders(req, remoteAddress) {
     const lower = name.toLowerCase();
 
     if (
+      lower === "host" ||
       lower === "x-forwarded-for" ||
       lower === "x-forwarded-host" ||
       lower === "x-forwarded-proto"
@@ -990,10 +1047,13 @@ function serializeUpgradeHeaders(req, remoteAddress) {
   }
 
   forwardedHeaders.push(
-    `X-Forwarded-For: ${appendForwarded(req.headers["x-forwarded-for"], remoteAddress)}`,
+    `Host: ${GATEWAY_HOST}:${proxyPort}`,
   );
   forwardedHeaders.push(
-    `X-Forwarded-Host: ${req.headers["x-forwarded-host"] || req.headers.host || ""}`,
+    `X-Forwarded-For: ${clientIp || ""}`,
+  );
+  forwardedHeaders.push(
+    `X-Forwarded-Host: ${req.headers.host || ""}`,
   );
   forwardedHeaders.push(
     `X-Forwarded-Proto: ${req.headers["x-forwarded-proto"] || "https"}`,
@@ -1010,11 +1070,12 @@ function proxyUpgrade(
   proxyPort = GATEWAY_PORT,
 ) {
   const proxySocket = net.connect(proxyPort, GATEWAY_HOST);
+  const clientIp = getForwardedClientIp(req);
 
   proxySocket.on("connect", () => {
     const requestLines = [
       `${req.method} ${proxyPath} HTTP/${req.httpVersion}`,
-      ...serializeUpgradeHeaders(req, req.socket.remoteAddress),
+      ...serializeUpgradeHeaders(req, clientIp, proxyPort),
       "",
       "",
     ];
@@ -1092,15 +1153,33 @@ const server = http.createServer((req, res) => {
 
     void (async () => {
       try {
+        if (!UPTIMEROBOT_SETUP_ENABLED) {
+          res.writeHead(403, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ message: "Uptime setup is disabled." }));
+          return;
+        }
+
+        if (isRateLimited(req)) {
+          res.writeHead(429, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ message: "Too many requests." }));
+          return;
+        }
+
+        if (!isAllowedUptimeSetupOrigin(req)) {
+          res.writeHead(403, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ message: "Invalid request origin." }));
+          return;
+        }
+
         const body = await readRequestBody(req);
         const parsed = JSON.parse(body || "{}");
         const apiKey = String(parsed.apiKey || "").trim();
 
-        if (!apiKey) {
+        if (!isValidUptimeApiKey(apiKey)) {
           res.writeHead(400, { "Content-Type": "application/json" });
           res.end(
             JSON.stringify({
-              message: "Paste your UptimeRobot Main API key first.",
+              message: "A valid API key is required.",
             }),
           );
           return;

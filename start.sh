@@ -1,5 +1,7 @@
 #!/bin/bash
-set -e
+set -euo pipefail
+
+umask 0077
 
 # ════════════════════════════════════════════════════════════════
 # HuggingClaw — OpenClaw Gateway for HF Spaces
@@ -127,95 +129,13 @@ if [ -n "$HF_TOKEN" ]; then
   fi
 fi
 
-# ── Auto-create + Restore workspace from HF Dataset ──
-if [ -n "$HF_USERNAME" ] && [ -n "$HF_TOKEN" ]; then
-  BACKUP_DATASET="${BACKUP_DATASET_NAME:-huggingclaw-backup}"
-  BACKUP_URL="https://${HF_USERNAME}:${HF_TOKEN}@huggingface.co/datasets/${HF_USERNAME}/${BACKUP_DATASET}"
-  
-  # Auto-create the dataset if it doesn't exist
-  echo "📦 Checking HF Dataset: ${HF_USERNAME}/${BACKUP_DATASET}..."
-  DATASET_CHECK=$(curl -s -o /dev/null -w "%{http_code}" \
-    -H "Authorization: Bearer $HF_TOKEN" \
-    "https://huggingface.co/api/datasets/${HF_USERNAME}/${BACKUP_DATASET}" \
-    --max-time 10 2>/dev/null || echo "000")
-  
-  if [ "$DATASET_CHECK" = "404" ]; then
-    echo "  📝 Dataset not found, creating ${HF_USERNAME}/${BACKUP_DATASET}..."
-    CREATE_RESULT=$(curl -s -w "\n%{http_code}" \
-      -X POST "https://huggingface.co/api/repos/create" \
-      -H "Authorization: Bearer $HF_TOKEN" \
-      -H "Content-Type: application/json" \
-      -d "{\"type\":\"dataset\",\"name\":\"${BACKUP_DATASET}\",\"private\":true}" \
-      --max-time 15 2>/dev/null || echo "error")
-    CREATE_STATUS=$(echo "$CREATE_RESULT" | tail -1)
-    if [ "$CREATE_STATUS" = "200" ] || [ "$CREATE_STATUS" = "201" ]; then
-      echo "  ✅ Dataset created: ${HF_USERNAME}/${BACKUP_DATASET} (private)"
-    else
-      echo "  ⚠️  Could not create dataset (HTTP $CREATE_STATUS). Create it manually:"
-      echo "     https://huggingface.co/datasets/create"
-    fi
-  elif [ "$DATASET_CHECK" = "200" ]; then
-    echo "  ✅ Dataset exists"
-  else
-    echo "  ⚠️  Could not check dataset (HTTP $DATASET_CHECK)"
-  fi
-  
-  # Restore workspace
-  echo "📦 Restoring workspace..."
-  WORKSPACE="/home/node/.openclaw/workspace"
-  GIT_USER_EMAIL="${WORKSPACE_GIT_USER:-openclaw@example.com}"
-  GIT_USER_NAME="${WORKSPACE_GIT_NAME:-OpenClaw Bot}"
-  
-  cd "$WORKSPACE"
-  if [ ! -d ".git" ]; then
-    git init -q
-    git remote add origin "$BACKUP_URL"
-  else
-    git remote set-url origin "$BACKUP_URL"
-  fi
-  
-  git config user.email "$GIT_USER_EMAIL"
-  git config user.name "$GIT_USER_NAME"
-  
-  if git fetch origin main 2>/dev/null; then
-    git reset --hard origin/main 2>/dev/null && echo "  ✅ Workspace restored!"
-  else
-    echo "  ⚠️ No remote data yet, starting fresh."
-  fi
-  cd /
-fi
-
-# ── Restore persisted OpenClaw state (if present) ──
-STATE_BACKUP_ROOT="/home/node/.openclaw/workspace/.huggingclaw-state/openclaw"
-if [ -d "$STATE_BACKUP_ROOT" ]; then
-  echo "🧠 Restoring OpenClaw state..."
-  for source_path in "$STATE_BACKUP_ROOT"/*; do
-    [ -e "$source_path" ] || continue
-    name="$(basename "$source_path")"
-    target_path="/home/node/.openclaw/${name}"
-
-    rm -rf "$target_path"
-    mkdir -p "$(dirname "$target_path")"
-    cp -R "$source_path" "$target_path"
-  done
-  echo "  ✅ OpenClaw state restored"
-fi
-
-# ── Restore persisted WhatsApp credentials (if present) ──
-WA_BACKUP_DIR="/home/node/.openclaw/workspace/.huggingclaw-state/credentials/whatsapp/default"
-WA_CREDS_DIR="/home/node/.openclaw/credentials/whatsapp/default"
-if [ "$WHATSAPP_ENABLED_NORMALIZED" = "true" ] && [ -d "$WA_BACKUP_DIR" ]; then
-  WA_FILE_COUNT=$(find "$WA_BACKUP_DIR" -type f | wc -l | tr -d ' ')
-  if [ "$WA_FILE_COUNT" -ge 2 ]; then
-    echo "📱 Restoring WhatsApp credentials..."
-    rm -rf "$WA_CREDS_DIR"
-    mkdir -p "$(dirname "$WA_CREDS_DIR")"
-    cp -R "$WA_BACKUP_DIR" "$WA_CREDS_DIR"
-    chmod -R go-rwx /home/node/.openclaw/credentials/whatsapp 2>/dev/null || true
-    echo "  ✅ WhatsApp credentials restored"
-  else
-    echo "  ⚠️  Saved WhatsApp credentials look incomplete (${WA_FILE_COUNT} files), skipping restore."
-  fi
+# ── Restore workspace/state from HF Dataset ──
+BACKUP_DATASET="${BACKUP_DATASET_NAME:-huggingclaw-backup}"
+if [ -n "${HF_TOKEN:-}" ]; then
+  echo "📦 Restoring workspace and state from HF Dataset..."
+  python3 /home/node/app/workspace-sync.py restore || true
+else
+  echo "HF_TOKEN is not set. Running without dataset persistence."
 fi
 
 # ── Build config ──
@@ -419,8 +339,8 @@ printf "  │  %-40s │\n" "Browser: ✅ ${BROWSER_EXECUTABLE_PATH}"
 else
 printf "  │  %-40s │\n" "Browser: ❌ unavailable"
 fi
-if [ -n "$HF_USERNAME" ] && [ -n "$HF_TOKEN" ]; then
-printf "  │  %-40s │\n" "Backup: ✅ ${HF_USERNAME}/${BACKUP_DATASET:-huggingclaw-backup}"
+if [ -n "${HF_TOKEN:-}" ]; then
+printf "  │  %-40s │\n" "Backup: ✅ ${BACKUP_DATASET:-huggingclaw-backup} (auto namespace)"
 else
 printf "  │  %-40s │\n" "Backup: ❌ not configured"
 fi
@@ -434,7 +354,7 @@ printf "  │  %-40s │\n" "Control UI: https://${SPACE_HOST}/app"
 printf "  │  %-40s │\n" "Dashboard: https://${SPACE_HOST}"
 fi
 SYNC_STATUS="❌ disabled"
-if [ -n "$HF_USERNAME" ] && [ -n "$HF_TOKEN" ]; then
+if [ -n "${HF_TOKEN:-}" ]; then
   SYNC_STATUS="✅ every ${SYNC_INTERVAL:-180}s"
 fi
 printf "  │  %-40s │\n" "Auto-sync: $SYNC_STATUS"
@@ -459,7 +379,7 @@ graceful_shutdown() {
 
   if [ -f "/home/node/app/workspace-sync.py" ]; then
     echo "💾 Saving OpenClaw state before exit..."
-    python3 /home/node/app/workspace-sync.py --sync-once || \
+    python3 /home/node/app/workspace-sync.py sync-once || \
       echo "  ⚠️ Could not complete shutdown sync"
   fi
   
@@ -530,7 +450,9 @@ fi
 warmup_browser
 
 # 12. Start Workspace Sync after startup settles
-python3 -u /home/node/app/workspace-sync.py &
+if [ -n "${HF_TOKEN:-}" ]; then
+  python3 -u /home/node/app/workspace-sync.py loop &
+fi
 
 # Wait for gateway (allows trap to fire)
 wait $GATEWAY_PID

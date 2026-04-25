@@ -50,7 +50,7 @@ secrets:
 - ⚡ **Zero Config:** Duplicate this Space and set **just three** secrets (LLM_API_KEY, LLM_MODEL, GATEWAY_TOKEN) – no other setup needed.
 - 🐳 **Fast Builds:** Uses a pre-built OpenClaw Docker image to deploy in minutes.
 - 🌐 **Built-In Browser:** Headless Chromium is included in the Space, so browser actions work from the start.
-- 💾 **Workspace Backup:** Chats, settings, and WhatsApp session state sync to a private HF Dataset via the `huggingface_hub` (Git fallback), preserving data automatically.
+- 💾 **Workspace Backup:** Chats, settings, and WhatsApp session state sync to a private HF Dataset via the `huggingface_hub`, preserving data automatically without storing your HF token in a git remote.
 - ⏰ **External Keep-Alive:** Set up a one-time UptimeRobot monitor from the dashboard to help keep free HF Spaces awake.
 - 👥 **Multi-User Messaging:** Support for Telegram (multi-user) and WhatsApp (pairing).
 - 📊 **Visual Dashboard:** Beautiful Web UI to monitor uptime, sync status, and active models.
@@ -120,16 +120,16 @@ To use WhatsApp, enable the channel and scan the QR code from the Control UI (**
 
 ## 💾 Workspace Backup *(Optional)*
 
-For persistent chat history and configuration, HuggingClaw can sync your workspace to a private HuggingFace Dataset. On first run, it will automatically create (or use) the Dataset repo `HF_USERNAME/SPACE-backup`, restore your workspace on startup, and sync changes periodically.
+As of **v1.4.0**, HuggingClaw uses the safer API-based backup flow by default: no token-bearing git remote is configured, and `HF_USERNAME` is usually optional.
+
+For persistent chat history and configuration, HuggingClaw can sync your workspace to a private HuggingFace Dataset. On first run, it will automatically create (or use) the Dataset repo `<your-account>/huggingclaw-backup`, restore your workspace on startup, and sync changes periodically. In most cases, `HF_USERNAME` is no longer required because HuggingClaw can derive the namespace from your token automatically.
 
 | Variable | Default | Description |
 | :--- | :--- | :--- |
-| `HF_USERNAME` | — | Your HuggingFace username |
+| `HF_USERNAME` | — | Optional override for the HuggingFace username/namespace |
 | `HF_TOKEN` | — | HF token with write access |
 | `BACKUP_DATASET_NAME` | `huggingclaw-backup` | Dataset name for backup repo |
 | `SYNC_INTERVAL` | `180` | Sync interval in seconds |
-| `WORKSPACE_GIT_USER` | `openclaw@example.com` | Git commit email for syncs |
-| `WORKSPACE_GIT_NAME` | `OpenClaw Bot` | Git commit name for syncs |
 
 > [!TIP]
 > This backup also stores a hidden copy of your WhatsApp session credentials, allowing paired logins to survive Space restarts automatically.
@@ -155,6 +155,7 @@ What happens next:
 - You only need to do this once
 
 You do **not** need to add this key to Hugging Face Space Secrets.
+The dashboard helper also rate-limits setup requests and rejects cross-origin submissions.
 
 Note:
 
@@ -290,7 +291,7 @@ openclaw channels login --gateway https://YOUR_SPACE_NAME.hf.space
 HuggingClaw/
 ├── Dockerfile          # Multi-stage build using pre-built OpenClaw image
 ├── start.sh            # Config generator, validator, and orchestrator
-├── workspace-sync.py   # Syncs workspace to HF Datasets (with Git fallback)
+├── workspace-sync.py   # Syncs workspace/state to HF Datasets via huggingface_hub
 ├── health-server.js    # /health endpoint for uptime checks
 ├── dns-fix.js          # DNS-over-HTTPS fallback (for blocked domains)
 ├── .env.example        # Environment variable reference
@@ -299,8 +300,8 @@ HuggingClaw/
 **Startup sequence:**
 1. Validate required secrets (fail fast with clear error).
 2. Check HF token (warn if expired or missing).
-3. Auto-create backup dataset if missing.
-4. Restore workspace from HF Dataset.
+3. Resolve the backup namespace from `HF_USERNAME`, `SPACE_AUTHOR_NAME`, or the HF token.
+4. Auto-create backup dataset if missing and restore workspace/state from it.
 5. Generate `openclaw.json` from environment variables.
 6. Print startup summary.
 7. Launch background tasks (auto-sync and optional channel helpers).
@@ -312,11 +313,11 @@ HuggingClaw/
 
 - **Missing secrets:** Ensure `LLM_API_KEY`, `LLM_MODEL`, and `GATEWAY_TOKEN` are set in your Space **Settings → Secrets**.
 - **Telegram bot issues:** Verify your `TELEGRAM_BOT_TOKEN`. Check Space logs for lines like `📱 Enabling Telegram`.
-- **Backup restore failing:** Make sure `HF_USERNAME` and `HF_TOKEN` are correct (token needs write access to your Dataset).
+- **Backup restore failing:** Make sure `HF_TOKEN` is valid and has write access to your HF account dataset. Set `HF_USERNAME` only if auto-detection is not available in your environment.
 - **Space keeps sleeping:** Open `/` and use `Keep Space Awake` to create the external monitor.
 - **Auth errors / proxy:** If you see reverse-proxy auth errors, add the logged IPs under `TRUSTED_PROXIES` (from logs `remote=x.x.x.x`).
 - **Control UI says too many failed authentication attempts:** Wait for the retry window to expire, then open the Space in an incognito window or clear site storage for your Space before logging in again with `GATEWAY_TOKEN`.
-- **WhatsApp lost its session after restart:** Make sure `HF_USERNAME` and `HF_TOKEN` are configured so the hidden session backup can be restored on boot.
+- **WhatsApp lost its session after restart:** Make sure `HF_TOKEN` is configured so the hidden session backup can be restored on boot.
 - **UI blocked (CORS):** Set `ALLOWED_ORIGINS=https://your-space-name.hf.space`.
 - **Version mismatches:** Pin a specific OpenClaw build with the `OPENCLAW_VERSION` Variable in HF Spaces, or `--build-arg OPENCLAW_VERSION=...` locally.
 
