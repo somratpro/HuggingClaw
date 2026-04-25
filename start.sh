@@ -7,6 +7,8 @@ set -e
 
 # ── Startup Banner ──
 OPENCLAW_VERSION="${OPENCLAW_VERSION:-latest}"
+OPENCLAW_APP_DIR="/home/node/.openclaw/openclaw-app"
+OPENCLAW_RUNTIME_VERSION=""
 WHATSAPP_ENABLED="${WHATSAPP_ENABLED:-false}"
 WHATSAPP_ENABLED_NORMALIZED=$(printf '%s' "$WHATSAPP_ENABLED" | tr '[:upper:]' '[:lower:]')
 SYNC_INTERVAL="${SYNC_INTERVAL:-180}"
@@ -30,8 +32,23 @@ fi
 if [ -n "$ERRORS" ]; then
   echo "Missing required secrets:"
   echo -e "$ERRORS"
-  echo "Add them in HF Spaces → Settings → Secrets"
+echo "Add them in HF Spaces → Settings → Secrets"
   exit 1
+fi
+
+# Resolve the actual bundled OpenClaw version so the banner reflects what is
+# inside the image, not just the requested tag.
+if [ -f "$OPENCLAW_APP_DIR/package.json" ]; then
+  OPENCLAW_RUNTIME_VERSION=$(node -p "require('$OPENCLAW_APP_DIR/package.json').version" 2>/dev/null || true)
+fi
+
+if [ -n "$OPENCLAW_RUNTIME_VERSION" ]; then
+  OPENCLAW_DISPLAY_VERSION="$OPENCLAW_RUNTIME_VERSION"
+  if [ "$OPENCLAW_VERSION" != "$OPENCLAW_RUNTIME_VERSION" ]; then
+    OPENCLAW_DISPLAY_VERSION="$OPENCLAW_RUNTIME_VERSION (tag: $OPENCLAW_VERSION)"
+  fi
+else
+  OPENCLAW_DISPLAY_VERSION="$OPENCLAW_VERSION"
 fi
 
 # ── Set LLM env based on model name ──
@@ -385,7 +402,7 @@ echo ""
 echo "  ┌──────────────────────────────────────────┐"
 echo "  │  📋 Configuration Summary                │"
 echo "  ├──────────────────────────────────────────┤"
-printf "  │  %-40s │\n" "OpenClaw: $OPENCLAW_VERSION"
+printf "  │  %-40s │\n" "OpenClaw: $OPENCLAW_DISPLAY_VERSION"
 printf "  │  %-40s │\n" "Model: $LLM_MODEL"
 if [ -n "$TELEGRAM_BOT_TOKEN" ]; then
 printf "  │  %-40s │\n" "Telegram: ✅ enabled"
