@@ -20,6 +20,7 @@ if [ -n "${SPACE_HOST:-}" ]; then
   OPENCLAW_CONSOLE_LOG_STYLE="${OPENCLAW_CONSOLE_LOG_STYLE:-compact}"
   TELEGRAM_NATIVE_COMMANDS="${TELEGRAM_NATIVE_COMMANDS:-}"
   TELEGRAM_AUTO_SELECT_FAMILY="${TELEGRAM_AUTO_SELECT_FAMILY:-false}"
+  BROWSER_PLUGIN_MODE="${BROWSER_PLUGIN_MODE:-disabled}"
   # HF Spaces does not benefit from Bonjour discovery, and the retries add noise.
   export OPENCLAW_DISABLE_BONJOUR="${OPENCLAW_DISABLE_BONJOUR:-1}"
 else
@@ -28,6 +29,7 @@ else
   OPENCLAW_CONSOLE_LOG_STYLE="${OPENCLAW_CONSOLE_LOG_STYLE:-pretty}"
   TELEGRAM_NATIVE_COMMANDS="${TELEGRAM_NATIVE_COMMANDS:-auto}"
   TELEGRAM_AUTO_SELECT_FAMILY="${TELEGRAM_AUTO_SELECT_FAMILY:-true}"
+  BROWSER_PLUGIN_MODE="${BROWSER_PLUGIN_MODE:-auto}"
 fi
 echo ""
 echo "  ╔══════════════════════════════════════════╗"
@@ -266,7 +268,9 @@ for candidate in /usr/bin/chromium /usr/bin/chromium-browser /snap/bin/chromium;
 done
 
 BROWSER_SHOULD_ENABLE=false
-if [ -n "$BROWSER_EXECUTABLE_PATH" ] && [ -x "$BROWSER_EXECUTABLE_PATH" ]; then
+if [ "$BROWSER_PLUGIN_MODE" = "enabled" ] && [ -n "$BROWSER_EXECUTABLE_PATH" ] && [ -x "$BROWSER_EXECUTABLE_PATH" ]; then
+  BROWSER_SHOULD_ENABLE=true
+elif [ "$BROWSER_PLUGIN_MODE" = "auto" ] && [ -n "$BROWSER_EXECUTABLE_PATH" ] && [ -x "$BROWSER_EXECUTABLE_PATH" ]; then
   BROWSER_SHOULD_ENABLE=true
 fi
 
@@ -378,6 +382,8 @@ printf "  │  %-40s │\n" "WhatsApp: ❌ disabled"
 fi
 if [ "$BROWSER_SHOULD_ENABLE" = "true" ]; then
 printf "  │  %-40s │\n" "Browser: ✅ ${BROWSER_EXECUTABLE_PATH}"
+elif [ -n "$BROWSER_EXECUTABLE_PATH" ] && [ -x "$BROWSER_EXECUTABLE_PATH" ]; then
+printf "  │  %-40s │\n" "Browser: ⏸ disabled (${BROWSER_PLUGIN_MODE})"
 else
 printf "  │  %-40s │\n" "Browser: ❌ unavailable"
 fi
