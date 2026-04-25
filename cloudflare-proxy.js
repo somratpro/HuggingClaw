@@ -256,6 +256,14 @@ if (PROXY_URL) {
       patchDispatch(exports.Agent?.prototype, "Agent");
       patchDispatch(exports.ProxyAgent?.prototype, "ProxyAgent");
 
+      // Patch the current global dispatcher
+      if (exports.getGlobalDispatcher) {
+        const globalDispatcher = exports.getGlobalDispatcher();
+        if (globalDispatcher && globalDispatcher.dispatch && !globalDispatcher.dispatch._patched) {
+          patchDispatch(globalDispatcher, "GlobalDispatcherInstance");
+        }
+      }
+
       if (exports.fetch && !exports.fetch._patched) {
         exports.fetch = async function (input, init) {
           return globalThis.fetch(input, init);
@@ -290,7 +298,7 @@ if (PROXY_URL) {
 
     // Patch already loaded undici instances
     for (const key in require.cache) {
-      if (key.includes('/undici/')) {
+      if (key.includes('/undici/') || key.endsWith('/undici/index.js')) {
         try { patchUndiciInstance(require.cache[key].exports); } catch (e) {}
       }
     }
