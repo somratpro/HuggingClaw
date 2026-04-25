@@ -14,8 +14,8 @@ secrets:
     description: The model ID to use, e.g. openai/gpt-4o or google/gemini-2.5-flash.
   - name: GATEWAY_TOKEN
     description: A strong password or token to secure your OpenClaw Control UI.
-  - name: CLOUDFLARE_API_TOKEN
-    description: Optional Cloudflare API token for automatic outbound proxy setup.
+  - name: CLOUDFLARE_WORKERS_TOKEN
+    description: Optional Cloudflare API token for automatic Cloudflare Worker proxy setup.
 ---
 
 <!-- Badges -->
@@ -105,7 +105,7 @@ To chat via Telegram:
 
 1. Create a bot via [@BotFather](https://t.me/BotFather): send `/newbot`, follow prompts, and copy the bot token.
 2. Find your Telegram user ID with [@userinfobot](https://t.me/userinfobot).
-3. Add `CLOUDFLARE_API_TOKEN` in Space secrets to let HuggingClaw auto-provision the outbound proxy, or set `CLOUDFLARE_PROXY_URL` manually if you already have a Worker.
+3. Add `CLOUDFLARE_WORKERS_TOKEN` in Space secrets to let HuggingClaw auto-provision the outbound proxy, or set `CLOUDFLARE_PROXY_URL` manually if you already have a Worker.
 4. Add these secrets in Settings → Secrets. After restarting, the bot should appear online on Telegram.
 
 | Variable | Default | Description |
@@ -120,9 +120,19 @@ Hugging Face Spaces sometimes blocks outgoing connections to Telegram, WhatsApp-
 
 Automatic setup:
 
-1. Create a Cloudflare API token with Workers edit permissions.
-2. Add `CLOUDFLARE_API_TOKEN` as a Space secret.
+1. Create a Cloudflare API Token for your account's Workers.
+2. Add `CLOUDFLARE_WORKERS_TOKEN` as a Space secret.
 3. Restart the Space.
+
+Recommended token setup:
+
+- Secret name: `CLOUDFLARE_WORKERS_TOKEN`
+- Token type: `API Token`
+- Account permission: `Workers Scripts: Edit`
+- Resource scope: your target Cloudflare account
+- Account auto-discovery is built in; `CLOUDFLARE_ACCOUNT_ID` is not required
+
+Do not use a Global API key, tunnel token, worker secret, or another Cloudflare credential here.
 
 HuggingClaw will:
 
@@ -143,8 +153,8 @@ Optional variables:
 
 | Variable | Default | Description |
 | :--- | :--- | :--- |
-| `CLOUDFLARE_API_TOKEN` | — | Cloudflare API token for automatic Worker setup |
-| `CLOUDFLARE_ACCOUNT_ID` | auto | Optional Cloudflare account override |
+| `CLOUDFLARE_WORKERS_TOKEN` | — | Cloudflare API token for automatic Worker setup |
+| `CLOUDFLARE_ACCOUNT_ID` | auto | Optional Cloudflare account ID override if you want to pin a specific account |
 | `CLOUDFLARE_WORKER_NAME` | derived from Space host | Optional Worker script name |
 | `CLOUDFLARE_PROXY_URL` | auto | Use an existing Worker URL instead of auto-provisioning |
 | `CLOUDFLARE_PROXY_SECRET` | auto | Optional shared secret override |
@@ -286,6 +296,7 @@ Register a custom endpoint at startup without modifying the CLI.
 > `CUSTOM_PROVIDER_NAME` cannot override built-in providers (openai, anthropic, etc.).
 
 **Example (Modal):**
+
 ```bash
 CUSTOM_PROVIDER_NAME=modal
 CUSTOM_BASE_URL=https://api.us-west-2.modal.direct/v1

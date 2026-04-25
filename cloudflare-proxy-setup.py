@@ -138,7 +138,7 @@ def write_env(proxy_url: str, proxy_secret: str) -> None:
 def main() -> int:
     existing_url = os.environ.get("CLOUDFLARE_PROXY_URL", "").strip()
     existing_secret = os.environ.get("CLOUDFLARE_PROXY_SECRET", "").strip()
-    api_token = os.environ.get("CLOUDFLARE_API_TOKEN", "").strip()
+    api_token = os.environ.get("CLOUDFLARE_WORKERS_TOKEN", "").strip()
 
     if existing_url:
       if existing_secret:
@@ -191,6 +191,14 @@ def main() -> int:
         return 0
     except urllib.error.HTTPError as error:
         detail = error.read().decode("utf-8", errors="replace")
+        if error.code == 403 and '"code":9109' in detail:
+            print(
+                "☁️ Cloudflare proxy setup failed: invalid Workers token. "
+                "Use a Cloudflare API Token in CLOUDFLARE_WORKERS_TOKEN "
+                "(not a Global API Key, tunnel token, or worker secret). "
+                "For auto-setup, it should have account-level 'Workers Scripts: Edit'. "
+                "The setup can auto-discover your account; CLOUDFLARE_ACCOUNT_ID is not required."
+            )
         print(f"☁️ Cloudflare proxy setup failed: HTTP {error.code} {detail}")
         return 1
     except Exception as error:

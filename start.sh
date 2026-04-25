@@ -152,7 +152,7 @@ else
 fi
 
 CF_PROXY_ENV_FILE="/tmp/huggingclaw-cloudflare-proxy.env"
-if [ -n "${CLOUDFLARE_API_TOKEN:-}" ] || [ -n "${CLOUDFLARE_PROXY_URL:-}" ]; then
+if [ -n "${CLOUDFLARE_WORKERS_TOKEN:-}" ] || [ -n "${CLOUDFLARE_PROXY_URL:-}" ]; then
   echo "☁️ Preparing Cloudflare outbound proxy..."
   python3 /home/node/app/cloudflare-proxy-setup.py || true
   if [ -f "$CF_PROXY_ENV_FILE" ]; then

@@ -7,7 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - **Custom OpenAI-compatible provider registration** — HuggingClaw can now register a custom provider at startup with `CUSTOM_PROVIDER_NAME`, `CUSTOM_BASE_URL`, and `CUSTOM_MODEL_ID`, so you can point `LLM_MODEL` at your own OpenAI-compatible endpoint without modifying the OpenClaw CLI
-- **Automatic Cloudflare outbound proxy setup** — HuggingClaw can now provision and use a Cloudflare Worker proxy for blocked outbound traffic from a `CLOUDFLARE_API_TOKEN`, with the same transparent proxy model used in Hugging8n
+- **Automatic Cloudflare outbound proxy setup** — HuggingClaw can now provision and use a Cloudflare Worker proxy for blocked outbound traffic from a `CLOUDFLARE_WORKERS_TOKEN`, using the same transparent proxy model used in Hugging8n
 
 ### Changed
 
