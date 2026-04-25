@@ -6,8 +6,10 @@
  */
 "use strict";
 
-// Always log that we are loaded
-console.log("🦞 Cloudflare Proxy: Transparent redirector active");
+// Use stderr for logs to avoid breaking child processes that communicate via stdout JSON
+const log = (...args) => console.error(...args);
+
+log("🦞 Cloudflare Proxy: Transparent redirector active");
 
 const https = require("https");
 const http = require("http");
@@ -23,7 +25,6 @@ if (
 
 const DEBUG = process.env.CLOUDFLARE_PROXY_DEBUG === "true" || true;
 const PROXY_SHARED_SECRET = (process.env.CLOUDFLARE_PROXY_SECRET || "").trim();
-// Default to wildcard mode to ensure all blocked external traffic is caught
 const PROXY_DOMAINS = process.env.CLOUDFLARE_PROXY_DOMAINS || "*";
 const BLOCKED_DOMAINS = PROXY_DOMAINS.split(",")
   .map((domain) => domain.trim())
@@ -91,7 +92,7 @@ if (PROXY_URL) {
 
         if (shouldProxy && !alreadyProxied && !hasTargetHeader) {
           if (DEBUG) {
-            console.log(
+            log(
               `[cloudflare-proxy] Redirecting ${originalModuleName}://${hostname}${path} -> ${proxy.hostname}`,
             );
           }
@@ -129,7 +130,6 @@ if (PROXY_URL) {
     https.request = patch(originalHttpsRequest, "https");
     http.request = patch(originalHttpRequest, "http");
 
-    // Patch global fetch
     if (originalFetch) {
       globalThis.fetch = async function patchedFetch(input, init) {
         const request = input instanceof Request ? input : null;
@@ -160,7 +160,7 @@ if (PROXY_URL) {
         }
 
         if (DEBUG) {
-          console.log(
+          log(
             `[cloudflare-proxy] Redirecting fetch://${hostname}${url.pathname}${url.search} -> ${proxy.hostname}`,
           );
         }
@@ -190,92 +190,99 @@ if (PROXY_URL) {
       };
     }
 
-    // Comprehensive undici patching via require interception
+    const patchUndiciInstance = (exports) => {
+      if (!exports) return;
+      if (exports.fetch && !exports.fetch._patched) {
+        exports.fetch = async function (input, init) {
+          return globalThis.fetch(input, init);
+        };
+        exports.fetch._patched = true;
+        if (DEBUG) log("[cloudflare-proxy] Patched undici.fetch");
+      }
+      
+      if (exports.request && !exports.request._patched) {
+        const origUndiciRequest = exports.request;
+        exports.request = async function(url, options) {
+          let parsedUrl;
+          try {
+            parsedUrl = new URL(url);
+          } catch(e) {
+            return origUndiciRequest.apply(this, arguments);
+          }
+          if (shouldProxyHost(parsedUrl.hostname)) {
+            if (DEBUG) log(`[cloudflare-proxy] Redirecting undici.request://${parsedUrl.hostname} -> ${proxy.hostname}`);
+            const headers = options?.headers || {};
+            headers["x-target-host"] = parsedUrl.hostname;
+            if (PROXY_SHARED_SECRET) headers["x-proxy-key"] = PROXY_SHARED_SECRET;
+            const proxiedUrl = new URL(parsedUrl.pathname + parsedUrl.search, proxy);
+            return origUndiciRequest.call(this, proxiedUrl, { ...options, headers });
+          }
+          return origUndiciRequest.apply(this, arguments);
+        };
+        exports.request._patched = true;
+        if (DEBUG) log("[cloudflare-proxy] Patched undici.request");
+      }
+
+      if (exports.Dispatcher && exports.Dispatcher.prototype.dispatch && !exports.Dispatcher.prototype.dispatch._patched) {
+        const origDispatch = exports.Dispatcher.prototype.dispatch;
+        exports.Dispatcher.prototype.dispatch = function(options, handler) {
+          const origin = options.origin ? String(options.origin) : "";
+          let hostname = "";
+          try {
+            hostname = new URL(origin).hostname;
+          } catch(e) {
+            hostname = origin.split(':')[0];
+          }
+          if (shouldProxyHost(hostname)) {
+            if (DEBUG) log(`[cloudflare-proxy] Redirecting undici dispatch: ${hostname}${options.path} -> ${proxy.hostname}`);
+            if (Array.isArray(options.headers)) {
+              options.headers.push("x-target-host", hostname);
+              if (PROXY_SHARED_SECRET) options.headers.push("x-proxy-key", PROXY_SHARED_SECRET);
+            } else {
+              options.headers = options.headers || {};
+              options.headers["x-target-host"] = hostname;
+              if (PROXY_SHARED_SECRET) options.headers["x-proxy-key"] = PROXY_SHARED_SECRET;
+            }
+            options.origin = `https://${proxy.hostname}`;
+          }
+          return origDispatch.call(this, options, handler);
+        };
+        exports.Dispatcher.prototype.dispatch._patched = true;
+        if (DEBUG) log("[cloudflare-proxy] Patched undici.Dispatcher.prototype.dispatch");
+      }
+    };
+
+    // Patch already loaded undici instances
+    for (const key in require.cache) {
+      if (key.includes('/undici/')) {
+        try { patchUndiciInstance(require.cache[key].exports); } catch (e) {}
+      }
+    }
+
+    // Try to require undici immediately to patch it before others use it
+    try {
+      const undici = require("undici");
+      patchUndiciInstance(undici);
+    } catch (e) {}
+
+    // Intercept future undici requirements
     const Module = require("module");
     const originalRequire = Module.prototype.require;
     Module.prototype.require = function (id) {
       const exports = originalRequire.apply(this, arguments);
-      if (id === "undici" || id.endsWith("/undici/index.js") || id.endsWith("/undici/lib/index.js")) {
-        // Patch undici.fetch
-        if (exports.fetch && !exports.fetch._patched) {
-          const origUndiciFetch = exports.fetch;
-          exports.fetch = async function (input, init) {
-            return globalThis.fetch(input, init);
-          };
-          exports.fetch._patched = true;
-          if (DEBUG) console.log("[cloudflare-proxy] Patched undici.fetch");
-        }
-        
-        // Patch undici.request
-        if (exports.request && !exports.request._patched) {
-           const origUndiciRequest = exports.request;
-           exports.request = async function(url, options) {
-               let parsedUrl;
-               try {
-                   parsedUrl = new URL(url);
-               } catch(e) {
-                   return origUndiciRequest.apply(this, arguments);
-               }
-               
-               if (shouldProxyHost(parsedUrl.hostname)) {
-                   if (DEBUG) console.log(`[cloudflare-proxy] Redirecting undici.request://${parsedUrl.hostname} -> ${proxy.hostname}`);
-                   const headers = options?.headers || {};
-                   headers["x-target-host"] = parsedUrl.hostname;
-                   if (PROXY_SHARED_SECRET) headers["x-proxy-key"] = PROXY_SHARED_SECRET;
-                   
-                   const proxiedUrl = new URL(parsedUrl.pathname + parsedUrl.search, proxy);
-                   return origUndiciRequest.call(this, proxiedUrl, {
-                       ...options,
-                       headers
-                   });
-               }
-               return origUndiciRequest.apply(this, arguments);
-           };
-           exports.request._patched = true;
-           if (DEBUG) console.log("[cloudflare-proxy] Patched undici.request");
-        }
-
-        // Patch undici.Dispatcher to catch low-level calls (Pool, Client, etc.)
-        if (exports.Dispatcher && exports.Dispatcher.prototype.dispatch && !exports.Dispatcher.prototype.dispatch._patched) {
-            const origDispatch = exports.Dispatcher.prototype.dispatch;
-            exports.Dispatcher.prototype.dispatch = function(options, handler) {
-                const origin = options.origin ? String(options.origin) : "";
-                let hostname = "";
-                try {
-                    hostname = new URL(origin).hostname;
-                } catch(e) {
-                    hostname = origin.split(':')[0];
-                }
-
-                if (shouldProxyHost(hostname)) {
-                    if (DEBUG) console.log(`[cloudflare-proxy] Redirecting undici dispatch: ${hostname}${options.path} -> ${proxy.hostname}`);
-                    
-                    if (Array.isArray(options.headers)) {
-                        options.headers.push("x-target-host", hostname);
-                        if (PROXY_SHARED_SECRET) options.headers.push("x-proxy-key", PROXY_SHARED_SECRET);
-                    } else {
-                        options.headers = options.headers || {};
-                        options.headers["x-target-host"] = hostname;
-                        if (PROXY_SHARED_SECRET) options.headers["x-proxy-key"] = PROXY_SHARED_SECRET;
-                    }
-                    
-                    options.origin = `https://${proxy.hostname}`;
-                }
-                return origDispatch.call(this, options, handler);
-            };
-            exports.Dispatcher.prototype.dispatch._patched = true;
-            if (DEBUG) console.log("[cloudflare-proxy] Patched undici.Dispatcher.prototype.dispatch");
-        }
+      if (id === "undici" || id.includes("/undici/")) {
+        patchUndiciInstance(exports);
       }
       return exports;
     };
 
     if (DEBUG) {
-      console.log(`[cloudflare-proxy] Target proxy: ${proxy.hostname}`);
-      console.log(`[cloudflare-proxy] Proxying: ${PROXY_ALL ? "ALL (except internal)" : BLOCKED_DOMAINS.join(", ")}`);
+      log(`[cloudflare-proxy] Target proxy: ${proxy.hostname}`);
+      log(`[cloudflare-proxy] Proxying: ${PROXY_ALL ? "ALL (except internal)" : BLOCKED_DOMAINS.join(", ")}`);
     }
   } catch (error) {
-    console.error(`[cloudflare-proxy] Failed to initialize: ${error.message}`);
+    log(`[cloudflare-proxy] Failed to initialize: ${error.message}`);
   }
 }
+
 
