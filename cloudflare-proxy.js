@@ -226,24 +226,57 @@ if (PROXY_URL) {
       if (exports.Dispatcher && exports.Dispatcher.prototype.dispatch && !exports.Dispatcher.prototype.dispatch._patched) {
         const origDispatch = exports.Dispatcher.prototype.dispatch;
         exports.Dispatcher.prototype.dispatch = function(options, handler) {
-          const origin = options.origin ? String(options.origin) : "";
+          // In undici, Pool/Client instances have a .origin property. 
+          // options.origin might be missing for instance-bound calls.
+          let origin = options.origin || this.origin;
+          if (origin && typeof origin !== 'string') {
+            try { origin = origin.origin || origin.toString(); } catch (e) { origin = ""; }
+          }
+          
           let hostname = "";
           try {
-            hostname = new URL(origin).hostname;
+            hostname = new URL(String(origin)).hostname;
           } catch(e) {
-            hostname = origin.split(':')[0];
+            hostname = String(origin || "").split(':')[0];
           }
-          if (shouldProxyHost(hostname)) {
-            if (DEBUG) log(`[cloudflare-proxy] Redirecting undici dispatch: ${hostname}${options.path} -> ${proxy.hostname}`);
-            if (Array.isArray(options.headers)) {
-              options.headers.push("x-target-host", hostname);
-              if (PROXY_SHARED_SECRET) options.headers.push("x-proxy-key", PROXY_SHARED_SECRET);
+
+          if (hostname && shouldProxyHost(hostname)) {
+            if (DEBUG) log(`[cloudflare-proxy] Redirecting undici dispatch: ${hostname}${options.path || ""} -> ${proxy.hostname}`);
+            
+            // Ensure we have headers to modify
+            let headers = options.headers;
+            const targetHeader = "x-target-host";
+            const secretHeader = "x-proxy-key";
+
+            if (Array.isArray(headers)) {
+              // undici internal header array format: [key, value, key, value, ...]
+              let foundTarget = false;
+              for (let i = 0; i < headers.length; i += 2) {
+                if (String(headers[i]).toLowerCase() === targetHeader) {
+                  foundTarget = true;
+                  break;
+                }
+              }
+              if (!foundTarget) {
+                headers.push(targetHeader, hostname);
+                if (PROXY_SHARED_SECRET) headers.push(secretHeader, PROXY_SHARED_SECRET);
+              }
             } else {
-              options.headers = options.headers || {};
-              options.headers["x-target-host"] = hostname;
-              if (PROXY_SHARED_SECRET) options.headers["x-proxy-key"] = PROXY_SHARED_SECRET;
+              // Object or Headers format
+              options.headers = headers || {};
+              if (options.headers instanceof Map || (typeof options.headers.set === 'function')) {
+                options.headers.set(targetHeader, hostname);
+                if (PROXY_SHARED_SECRET) options.headers.set(secretHeader, PROXY_SHARED_SECRET);
+              } else {
+                options.headers[targetHeader] = hostname;
+                if (PROXY_SHARED_SECRET) options.headers[secretHeader] = PROXY_SHARED_SECRET;
+              }
             }
+            
+            // Redirect the origin to the proxy
             options.origin = `https://${proxy.hostname}`;
+            // For Pools/Clients, we might need to override the internal state or just hope the dispatch options take precedence.
+            // In most undici versions, options.origin takes precedence in Dispatcher.dispatch.
           }
           return origDispatch.call(this, options, handler);
         };
