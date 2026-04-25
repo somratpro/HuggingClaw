@@ -118,7 +118,7 @@ chmod 700 /home/node/.openclaw
 chmod 700 /home/node/.openclaw/credentials
 
 # ── Validate HF token (if provided) ──
-if [ -n "$HF_TOKEN" ]; then
+if [ -n "${HF_TOKEN:-}" ]; then
   echo "🔑 Validating HF token..."
   HF_AUTH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $HF_TOKEN" https://huggingface.co/api/repos/create --max-time 10 2>/dev/null || echo "000")
   if [ "$HF_AUTH_STATUS" = "401" ]; then
@@ -261,7 +261,7 @@ if [ "$BROWSER_SHOULD_ENABLE" = "true" ]; then
 fi
 
 # Control UI origin (allow HF Space URL for web UI access)
-if [ -n "$SPACE_HOST" ]; then
+if [ -n "${SPACE_HOST:-}" ]; then
   CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".gateway.controlUi.allowedOrigins = [\"https://${SPACE_HOST}\"]")
 fi
 
@@ -269,35 +269,35 @@ fi
 CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".gateway.controlUi.dangerouslyDisableDeviceAuth = true")
 
 # Password auth (optional — simpler alternative to token for casual users)
-if [ -n "$OPENCLAW_PASSWORD" ]; then
+if [ -n "${OPENCLAW_PASSWORD:-}" ]; then
   CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".gateway.auth.mode = \"password\" | .gateway.auth.password = \"$OPENCLAW_PASSWORD\"")
 fi
 
 # Trusted proxies (optional — fixes "Proxy headers detected from untrusted address" on HF Spaces)
 # Set TRUSTED_PROXIES as comma-separated IPs/CIDRs, e.g. "10.20.31.87,10.20.26.157"
 # Loopback proxies stay trusted by default so the local dashboard reverse proxy works correctly.
-if [ -n "$TRUSTED_PROXIES" ]; then
+if [ -n "${TRUSTED_PROXIES:-}" ]; then
   PROXIES_JSON=$(echo "$TRUSTED_PROXIES" | tr ',' '\n' | sed 's/^ *//;s/ *$//' | jq -R . | jq -s .)
   CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".gateway.trustedProxies += $PROXIES_JSON | .gateway.trustedProxies |= unique")
 fi
 
 # Allowed origins (optional — lock down Control UI to specific URLs)
 # Set ALLOWED_ORIGINS as comma-separated URLs, e.g. "https://your-space.hf.space"
-if [ -n "$ALLOWED_ORIGINS" ]; then
+if [ -n "${ALLOWED_ORIGINS:-}" ]; then
   ORIGINS_JSON=$(echo "$ALLOWED_ORIGINS" | tr ',' '\n' | sed 's/^ *//;s/ *$//' | jq -R . | jq -s .)
   CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".gateway.controlUi.allowedOrigins = $ORIGINS_JSON")
 fi
 
 # Telegram (supports multiple user IDs, comma-separated)
-if [ -n "$TELEGRAM_BOT_TOKEN" ]; then
+if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
   CONFIG_JSON=$(echo "$CONFIG_JSON" | jq '.plugins.entries.telegram = {"enabled": true}')
   export TELEGRAM_BOT_TOKEN="$TELEGRAM_BOT_TOKEN"
   
-  if [ -n "$TELEGRAM_USER_IDS" ]; then
+  if [ -n "${TELEGRAM_USER_IDS:-}" ]; then
     # Convert comma-separated IDs to JSON array
     IDS_JSON=$(echo "$TELEGRAM_USER_IDS" | tr ',' '\n' | sed 's/^ *//;s/ *$//' | jq -R . | jq -s .)
     CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".channels.telegram = {\"dmPolicy\": \"allowlist\", \"allowFrom\": $IDS_JSON}")
-  elif [ -n "$TELEGRAM_USER_ID" ]; then
+  elif [ -n "${TELEGRAM_USER_ID:-}" ]; then
     # Single user (backward compatible)
     CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".channels.telegram = {\"dmPolicy\": \"allowlist\", \"allowFrom\": [\"$TELEGRAM_USER_ID\"]}")
   fi
@@ -324,7 +324,7 @@ echo "  │  📋 Configuration Summary                │"
 echo "  ├──────────────────────────────────────────┤"
 printf "  │  %-40s │\n" "OpenClaw: $OPENCLAW_DISPLAY_VERSION"
 printf "  │  %-40s │\n" "Model: $LLM_MODEL"
-if [ -n "$TELEGRAM_BOT_TOKEN" ]; then
+if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
 printf "  │  %-40s │\n" "Telegram: ✅ enabled"
 else
 printf "  │  %-40s │\n" "Telegram: ❌ not configured"
@@ -344,12 +344,12 @@ printf "  │  %-40s │\n" "Backup: ✅ ${BACKUP_DATASET:-huggingclaw-backup} (
 else
 printf "  │  %-40s │\n" "Backup: ❌ not configured"
 fi
-if [ -n "$OPENCLAW_PASSWORD" ]; then
+if [ -n "${OPENCLAW_PASSWORD:-}" ]; then
 printf "  │  %-40s │\n" "Auth: 🔑 password"
 else
 printf "  │  %-40s │\n" "Auth: 🔐 token"
 fi
-if [ -n "$SPACE_HOST" ]; then
+if [ -n "${SPACE_HOST:-}" ]; then
 printf "  │  %-40s │\n" "Control UI: https://${SPACE_HOST}/app"
 printf "  │  %-40s │\n" "Dashboard: https://${SPACE_HOST}"
 fi
@@ -358,14 +358,14 @@ if [ -n "${HF_TOKEN:-}" ]; then
   SYNC_STATUS="✅ every ${SYNC_INTERVAL:-180}s"
 fi
 printf "  │  %-40s │\n" "Auto-sync: $SYNC_STATUS"
-if [ -n "$WEBHOOK_URL" ]; then
+if [ -n "${WEBHOOK_URL:-}" ]; then
 printf "  │  %-40s │\n" "Webhooks: ✅ enabled"
 fi
 echo "  └──────────────────────────────────────────┘"
 echo ""
 
 # ── Trigger Webhook on Restart ──
-if [ -n "$WEBHOOK_URL" ]; then
+if [ -n "${WEBHOOK_URL:-}" ]; then
   echo "🔔 Sending restart webhook..."
   curl -s -X POST "$WEBHOOK_URL" \
        -H "Content-Type: application/json" \
