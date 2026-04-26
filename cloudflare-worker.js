@@ -32,7 +32,13 @@ export default {
     if (proxySecret) {
       const providedSecret = request.headers.get("x-proxy-key") || "";
       if (providedSecret !== proxySecret) {
-        return new Response("Unauthorized", { status: 401 });
+        // Fallback: allow Telegram requests via apiRoot without secret if no x-target-host is provided
+        // and the path matches Telegram bot API pattern.
+        if (url.pathname.startsWith("/bot") && !targetHost) {
+          // Allowed
+        } else {
+          return new Response("Unauthorized", { status: 401 });
+        }
       }
     }
 
