@@ -346,7 +346,6 @@ def sync_once(
                 repo_id=repo_id,
                 repo_type="dataset",
                 folder_path=str(snapshot_dir),
-                path_in_repo=".",
                 num_workers=2,
                 print_report=False,
             )
