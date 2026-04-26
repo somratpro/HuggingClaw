@@ -34,6 +34,13 @@ SPACE_AUTHOR_NAME = os.environ.get("SPACE_AUTHOR_NAME", "").strip()
 BACKUP_DATASET_NAME = os.environ.get("BACKUP_DATASET_NAME", "huggingclaw-backup").strip()
 WHATSAPP_ENABLED = os.environ.get("WHATSAPP_ENABLED", "").strip().lower() == "true"
 
+EXCLUDED_SYNC_DIRS = {
+    "node_modules", ".git", "__pycache__", ".venv", "venv",
+    ".npm", ".cache", ".yarn", "dist", "build", ".next", ".nuxt",
+    ".turbo", ".parcel-cache", "target", ".gradle", ".mvn",
+}
+MAX_FILE_SIZE_BYTES = int(os.environ.get("SYNC_MAX_FILE_BYTES", str(50 * 1024 * 1024)))
+
 STATE_DIR = WORKSPACE / ".huggingclaw-state"
 OPENCLAW_STATE_BACKUP_DIR = STATE_DIR / "openclaw"
 EXCLUDED_STATE_NAMES = {
@@ -183,6 +190,19 @@ def ensure_repo_exists() -> str:
     return repo_id
 
 
+def _should_exclude(rel_posix: str, path: Path) -> bool:
+    parts = Path(rel_posix).parts
+    if any(part in EXCLUDED_SYNC_DIRS for part in parts):
+        return True
+    if path.is_file():
+        try:
+            if path.stat().st_size > MAX_FILE_SIZE_BYTES:
+                return True
+        except OSError:
+            pass
+    return False
+
+
 def metadata_marker(root: Path) -> tuple[int, int, int]:
     if not root.exists():
         return (0, 0, 0)
@@ -194,7 +214,7 @@ def metadata_marker(root: Path) -> tuple[int, int, int]:
         if not path.is_file():
             continue
         rel = path.relative_to(root).as_posix()
-        if rel.startswith(".git/"):
+        if _should_exclude(rel, path):
             continue
         try:
             stat = path.stat()
@@ -213,7 +233,7 @@ def fingerprint_dir(root: Path) -> str:
 
     for path in sorted(p for p in root.rglob("*") if p.is_file()):
         rel = path.relative_to(root).as_posix()
-        if rel.startswith(".git/"):
+        if _should_exclude(rel, path):
             continue
         hasher.update(rel.encode("utf-8"))
         with path.open("rb") as handle:
@@ -227,7 +247,7 @@ def create_snapshot_dir(source_root: Path) -> Path:
     for path in sorted(source_root.rglob("*")):
         rel = path.relative_to(source_root)
         rel_posix = rel.as_posix()
-        if rel_posix.startswith(".git/") or rel_posix == ".git":
+        if _should_exclude(rel_posix, path):
             continue
         target = staging_root / rel
         if path.is_dir():
@@ -321,14 +341,24 @@ def sync_once(
     write_status("syncing", f"Uploading workspace to {repo_id}")
     snapshot_dir = create_snapshot_dir(WORKSPACE)
     try:
-        upload_folder(
-            folder_path=str(snapshot_dir),
-            repo_id=repo_id,
-            repo_type="dataset",
-            token=HF_TOKEN,
-            commit_message=f"HuggingClaw sync {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}",
-            ignore_patterns=[".git/*", ".git"],
-        )
+        try:
+            HF_API.upload_large_folder(
+                repo_id=repo_id,
+                repo_type="dataset",
+                folder_path=str(snapshot_dir),
+                path_in_repo=".",
+                num_workers=2,
+                print_report=False,
+            )
+        except AttributeError:
+            upload_folder(
+                folder_path=str(snapshot_dir),
+                repo_id=repo_id,
+                repo_type="dataset",
+                token=HF_TOKEN,
+                commit_message=f"HuggingClaw sync {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}",
+                ignore_patterns=[".git/*", ".git"],
+            )
     finally:
         shutil.rmtree(snapshot_dir, ignore_errors=True)
 
