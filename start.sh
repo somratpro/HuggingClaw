@@ -515,7 +515,8 @@ if [ "${GATEWAY_VERBOSE:-0}" = "1" ]; then
   echo "🔎 Gateway verbose logging enabled (GATEWAY_VERBOSE=1)"
 fi
 
-openclaw "${GATEWAY_ARGS[@]}" 2>&1 | tee -a /home/node/.openclaw/gateway.log &
+# Use stdbuf -oL -eL to ensure logs are not buffered and appear immediately in the console
+stdbuf -oL -eL openclaw "${GATEWAY_ARGS[@]}" 2>&1 | tee -a /home/node/.openclaw/gateway.log &
 GATEWAY_PID=$!
 
 # Wait a moment for startup errors

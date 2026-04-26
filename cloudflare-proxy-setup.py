@@ -86,15 +86,16 @@ function isAllowedHost(hostname) {{
 
 async function handleRequest(request) {{
   const url = new URL(request.url);
-  const targetHost = request.headers.get("x-target-host");
+  const queryTarget = url.searchParams.get("proxy_target");
+  const targetHost = request.headers.get("x-target-host") || queryTarget;
 
   if (PROXY_SHARED_SECRET) {{
-    const providedSecret = request.headers.get("x-proxy-key") || "";
+    const providedSecret = request.headers.get("x-proxy-key") || url.searchParams.get("proxy_key") || "";
     if (providedSecret !== PROXY_SHARED_SECRET) {{
       if (url.pathname.startsWith("/bot") && !targetHost) {{
         // Allowed fallback
       }} else {{
-        return new Response("Unauthorized", {{ status: 401 }});
+        return new Response("Unauthorized: Invalid proxy key", {{ status: 401 }});
       }}
     }}
   }}
@@ -102,16 +103,21 @@ async function handleRequest(request) {{
   let targetBase = "";
   if (targetHost) {{
     if (!isAllowedHost(targetHost)) {{
-      return new Response("Target host is not allowed.", {{ status: 403 }});
+      return new Response(`Forbidden: Host ${{targetHost}} is not allowed.`, {{ status: 403 }});
     }}
     targetBase = `https://${{targetHost}}`;
   }} else if (url.pathname.startsWith("/bot")) {{
     targetBase = "https://api.telegram.org";
   }} else {{
-    return new Response("Invalid request.", {{ status: 400 }});
+    return new Response("Invalid request: No target host provided.", {{ status: 400 }});
   }}
 
-  const targetUrl = targetBase + url.pathname + url.search;
+  const cleanSearch = new URLSearchParams(url.search);
+  cleanSearch.delete("proxy_target");
+  cleanSearch.delete("proxy_key");
+  const searchStr = cleanSearch.toString();
+  const targetUrl = targetBase + url.pathname + (searchStr ? `?${{searchStr}}` : "");
+  
   const headers = new Headers(request.headers);
   headers.delete("cf-connecting-ip");
   headers.delete("cf-ray");
@@ -119,6 +125,7 @@ async function handleRequest(request) {{
   headers.delete("host");
   headers.delete("x-real-ip");
   headers.delete("x-target-host");
+  headers.delete("x-proxy-key");
 
   const proxiedRequest = new Request(targetUrl, {{
     method: request.method,

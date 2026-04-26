@@ -22,7 +22,8 @@ function normalizeList(raw) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    const targetHost = request.headers.get("x-target-host");
+    const queryTarget = url.searchParams.get("proxy_target");
+    const targetHost = request.headers.get("x-target-host") || queryTarget;
     const proxySecret = (
       env.PROXY_SHARED_SECRET ||
       env.CLOUDFLARE_PROXY_SECRET ||
@@ -30,14 +31,14 @@ export default {
     ).trim();
 
     if (proxySecret) {
-      const providedSecret = request.headers.get("x-proxy-key") || "";
+      const providedSecret = request.headers.get("x-proxy-key") || url.searchParams.get("proxy_key") || "";
       if (providedSecret !== proxySecret) {
-        // Fallback: allow Telegram requests via apiRoot without secret if no x-target-host is provided
-        // and the path matches Telegram bot API pattern.
+        // Fallback: allow Telegram requests via path without secret if it looks like a bot API call.
+        // This is safe because it only proxies to api.telegram.org.
         if (url.pathname.startsWith("/bot") && !targetHost) {
           // Allowed
         } else {
-          return new Response("Unauthorized", { status: 401 });
+          return new Response("Unauthorized: Invalid proxy key", { status: 401 });
         }
       }
     }
@@ -62,16 +63,21 @@ export default {
     let targetBase = "";
     if (targetHost) {
       if (!isAllowedHost(targetHost)) {
-        return new Response("Target host is not allowed.", { status: 403 });
+        return new Response(`Forbidden: Host ${targetHost} is not allowed.`, { status: 403 });
       }
       targetBase = `https://${targetHost}`;
     } else if (url.pathname.startsWith("/bot")) {
       targetBase = "https://api.telegram.org";
     } else {
-      return new Response("Invalid request.", { status: 400 });
+      return new Response("Invalid request: No target host provided.", { status: 400 });
     }
 
-    const targetUrl = targetBase + url.pathname + url.search;
+    const cleanSearch = new URLSearchParams(url.search);
+    cleanSearch.delete("proxy_target");
+    cleanSearch.delete("proxy_key");
+    const searchStr = cleanSearch.toString();
+    const targetUrl = targetBase + url.pathname + (searchStr ? `?${searchStr}` : "");
+    
     const headers = new Headers(request.headers);
     headers.delete("cf-connecting-ip");
     headers.delete("cf-ray");
@@ -79,6 +85,7 @@ export default {
     headers.delete("host");
     headers.delete("x-real-ip");
     headers.delete("x-target-host");
+    headers.delete("x-proxy-key");
 
     const proxiedRequest = new Request(targetUrl, {
       method: request.method,
