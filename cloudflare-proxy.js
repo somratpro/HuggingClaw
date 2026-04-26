@@ -149,15 +149,15 @@ if (PROXY_URL) {
         const hostname = url.hostname;
         const shouldProxy = shouldProxyHost(hostname);
         
-        let headers;
+        let mergedHeaders;
         if (request) {
-            headers = new Headers(request.headers);
+            mergedHeaders = new Headers(request.headers);
         } else {
-            headers = new Headers(init?.headers || {});
+            mergedHeaders = new Headers(init?.headers || {});
         }
 
         const alreadyProxied =
-          headers.has("x-target-host") || headers.has("X-Target-Host");
+          mergedHeaders.has("x-target-host") || mergedHeaders.has("X-Target-Host");
 
         if (!shouldProxy || alreadyProxied) {
           return originalFetch(input, init);
@@ -169,9 +169,9 @@ if (PROXY_URL) {
           );
         }
 
-        headers.set("x-target-host", hostname);
+        mergedHeaders.set("x-target-host", hostname);
         if (PROXY_SHARED_SECRET) {
-          headers.set("x-proxy-key", PROXY_SHARED_SECRET);
+          mergedHeaders.set("x-proxy-key", PROXY_SHARED_SECRET);
         }
 
         const proxiedUrl = new URL(url.pathname + url.search, proxy);
@@ -179,18 +179,25 @@ if (PROXY_URL) {
         if (request) {
           const newInit = {
             method: request.method,
-            headers,
+            headers: mergedHeaders,
             body: request.body,
             redirect: request.redirect,
             duplex: "half",
           };
+          // If body is null/undefined, don't set duplex as some Node versions throw
+          if (!request.body) delete newInit.duplex;
           return originalFetch(new Request(proxiedUrl, newInit));
         }
 
-        return originalFetch(proxiedUrl, {
+        const newInit = {
           ...init,
-          headers,
-        });
+          headers: mergedHeaders,
+        };
+        if (newInit.body && !newInit.duplex) {
+          newInit.duplex = "half";
+        }
+
+        return originalFetch(proxiedUrl, newInit);
       };
     }
 
@@ -217,24 +224,23 @@ if (PROXY_URL) {
             if (hostname && shouldProxyHost(hostname)) {
               if (DEBUG) log(`[cloudflare-proxy] Redirecting undici ${name}.dispatch: ${hostname}${options.path || ""} -> ${proxy.hostname}`);
               
-              let headers = options.headers;
               const targetHeader = "x-target-host";
               const secretHeader = "x-proxy-key";
 
-              if (Array.isArray(headers)) {
+              if (Array.isArray(options.headers)) {
                 let foundTarget = false;
-                for (let i = 0; i < headers.length; i += 2) {
-                  if (String(headers[i]).toLowerCase() === targetHeader) {
+                for (let i = 0; i < options.headers.length; i += 2) {
+                  if (String(options.headers[i]).toLowerCase() === targetHeader) {
                     foundTarget = true;
                     break;
                   }
                 }
                 if (!foundTarget) {
-                  headers.push(targetHeader, hostname);
-                  if (PROXY_SHARED_SECRET) headers.push(secretHeader, PROXY_SHARED_SECRET);
+                  options.headers.push(targetHeader, hostname);
+                  if (PROXY_SHARED_SECRET) options.headers.push(secretHeader, PROXY_SHARED_SECRET);
                 }
               } else {
-                options.headers = headers || {};
+                options.headers = options.headers || {};
                 if (options.headers instanceof Map || (typeof options.headers.set === 'function')) {
                   options.headers.set(targetHeader, hostname);
                   if (PROXY_SHARED_SECRET) options.headers.set(secretHeader, PROXY_SHARED_SECRET);
@@ -266,8 +272,15 @@ if (PROXY_URL) {
         } catch (e) {}
       }
 
+      // Also patch Agent and other potentially unexported classes if they have dispatch
+      if (exports.Agent && exports.Agent.prototype) patchDispatch(exports.Agent.prototype, "Agent");
+      if (exports.Pool && exports.Pool.prototype) patchDispatch(exports.Pool.prototype, "Pool");
+      if (exports.Client && exports.Client.prototype) patchDispatch(exports.Client.prototype, "Client");
+
       if (exports.fetch && !exports.fetch._patched) {
+        const origFetch = exports.fetch;
         exports.fetch = async function (input, init) {
+          // If we are calling undici.fetch, it should use our globalThis.fetch which is patched
           return globalThis.fetch(input, init);
         };
         exports.fetch._patched = true;
