@@ -87,17 +87,16 @@ function isAllowedHost(hostname) {{
 async function handleRequest(request) {{
   const url = new URL(request.url);
   const targetHost = request.headers.get("x-target-host");
-if (PROXY_SHARED_SECRET) {
-  const providedSecret = request.headers.get("x-proxy-key") || "";
-  if (providedSecret !== PROXY_SHARED_SECRET) {
-    if (url.pathname.startsWith("/bot") && !targetHost) {
-      // Allowed fallback
-    } else {
-      return new Response("Unauthorized", { status: 401 });
-    }
-  }
-}
 
+  if (PROXY_SHARED_SECRET) {{
+    const providedSecret = request.headers.get("x-proxy-key") || "";
+    if (providedSecret !== PROXY_SHARED_SECRET) {{
+      if (url.pathname.startsWith("/bot") && !targetHost) {{
+        // Allowed fallback
+      }} else {{
+        return new Response("Unauthorized", {{ status: 401 }});
+      }}
+    }}
   }}
 
   let targetBase = "";
