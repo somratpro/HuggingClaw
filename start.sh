@@ -354,17 +354,18 @@ fi
 # Telegram (supports multiple user IDs, comma-separated)
 if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
   CONFIG_JSON=$(echo "$CONFIG_JSON" | jq '.plugins.entries.telegram = {"enabled": true}')
-  export TELEGRAM_BOT_TOKEN="$TELEGRAM_BOT_TOKEN"
+  export TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN//[[:space:]]/}"
   export OPENCLAW_TELEGRAM_DISABLE_AUTO_SELECT_FAMILY=1
   export OPENCLAW_TELEGRAM_DNS_RESULT_ORDER=ipv4first
-  CONFIG_JSON=$(echo "$CONFIG_JSON" | jq --arg token "$TELEGRAM_BOT_TOKEN" --arg proxy_url "${CLOUDFLARE_PROXY_URL:-}" '
+  # Force ipv4 for Telegram specifically as HF IPv6 often times out
+  export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--dns-result-order=ipv4first"
+  
+  CONFIG_JSON=$(echo "$CONFIG_JSON" | jq --arg token "$TELEGRAM_BOT_TOKEN" '
     .channels.telegram.enabled = true
     | .channels.telegram.botToken = $token
     | .channels.telegram.commands.native = false
     | .channels.telegram.timeoutSeconds = 60
-    | (if $proxy_url != "" then .channels.telegram.apiRoot = $proxy_url else . end)
-    # | .channels.telegram.network.autoSelectFamily = false
-    # | .channels.telegram.network.dnsResultOrder = "ipv4first"
+    | .channels.telegram.apiRoot = "https://api.telegram.org"
     | .channels.telegram.retry = {
         "attempts": 5,
         "minDelayMs": 800,

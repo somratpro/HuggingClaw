@@ -64,38 +64,39 @@ if (PROXY_URL) {
     };
 
     const patch = (original, originalModuleName) => {
-      return function patchedRequest(options, callback) {
-        let hostname = "";
-        let path = "";
-        let headers = {};
+      return function patchedRequest(arg1, arg2, arg3) {
+        let options = {};
+        let callback;
 
-        if (typeof options === "string") {
-          try {
-            const parsed = new URL(options);
-            hostname = parsed.hostname;
-            path = parsed.pathname + parsed.search;
-          } catch (e) {
-             hostname = options.split('/')[0];
-             path = '/' + options.split('/').slice(1).join('/');
+        if (typeof arg1 === "string" || arg1 instanceof URL) {
+          const url = typeof arg1 === "string" ? new URL(arg1) : arg1;
+          options = {
+            protocol: url.protocol,
+            hostname: url.hostname,
+            port: url.port,
+            path: url.pathname + url.search,
+          };
+          if (typeof arg2 === "object" && arg2 !== null) {
+            options = { ...options, ...arg2 };
+            callback = arg3;
+          } else {
+            callback = arg2;
           }
-        } else if (options instanceof URL) {
-          hostname = options.hostname;
-          path = options.pathname + options.search;
-          headers = options.headers || {};
-        } else if (options && typeof options === "object") {
-          hostname =
-            options.hostname ||
-            (options.host ? String(options.host).split(":")[0] : "");
-          path = options.path || "/";
-          headers = options.headers || {};
+        } else {
+          options = { ...arg1 };
+          callback = arg2;
         }
 
+        const hostname =
+          options.hostname ||
+          (options.host ? String(options.host).split(":")[0] : "");
+        const path = options.path || "/";
+        const headers = options.headers || {};
+
         const shouldProxy = shouldProxyHost(hostname);
-        const alreadyProxied =
-          options && typeof options === "object" && options._proxied;
+        const alreadyProxied = options._proxied;
         const hasTargetHeader =
-          headers &&
-          (headers["x-target-host"] || headers["X-Target-Host"]);
+          headers["x-target-host"] || headers["X-Target-Host"];
 
         if (shouldProxy && !alreadyProxied && !hasTargetHeader) {
           if (DEBUG) {
@@ -104,11 +105,7 @@ if (PROXY_URL) {
             );
           }
 
-          const newOptions =
-            typeof options === "string" || options instanceof URL
-              ? { protocol: "https:", path }
-              : { ...options };
-
+          const newOptions = { ...options };
           newOptions._proxied = true;
           newOptions.protocol = "https:";
           newOptions.hostname = proxy.hostname;
@@ -118,7 +115,7 @@ if (PROXY_URL) {
           delete newOptions.agent;
 
           newOptions.headers = {
-            ...(newOptions.headers || {}),
+            ...(options.headers || {}),
             host: proxy.host,
             "x-target-host": hostname,
           };
@@ -130,7 +127,7 @@ if (PROXY_URL) {
           return originalHttpsRequest.call(https, newOptions, callback);
         }
 
-        return original.call(this, options, callback);
+        return original.call(this, arg1, arg2, arg3);
       };
     };
 
