@@ -39,7 +39,7 @@ export default {
     const allowProxyAll =
       String(env.ALLOW_PROXY_ALL || "true").toLowerCase() === "true";
     const allowedTargets = normalizeList(
-      env.ALLOWED_TARGETS || "api.telegram.org,web.whatsapp.com",
+      env.ALLOWED_TARGETS || "api.telegram.org,discord.com,discordapp.com,gateway.discord.gg,status.discord.com,web.whatsapp.com,graph.facebook.com,googleapis.com,google.com,googleusercontent.com,gstatic.com",
     );
 
     const isAllowedHost = (hostname) => {

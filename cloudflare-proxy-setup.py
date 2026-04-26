@@ -13,7 +13,16 @@ API_BASE = "https://api.cloudflare.com/client/v4"
 ENV_FILE = Path("/tmp/huggingclaw-cloudflare-proxy.env")
 DEFAULT_ALLOWED = [
     "api.telegram.org",
+    "discord.com",
+    "discordapp.com",
+    "gateway.discord.gg",
+    "status.discord.com",
     "web.whatsapp.com",
+    "graph.facebook.com",
+    "googleapis.com",
+    "google.com",
+    "googleusercontent.com",
+    "gstatic.com",
 ]
 
 

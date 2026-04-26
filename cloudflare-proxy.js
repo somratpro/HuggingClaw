@@ -48,6 +48,7 @@ if (PROXY_URL) {
         normalized === "127.0.0.1" ||
         normalized === "::1" ||
         normalized === "0.0.0.0" ||
+        normalized === proxy.hostname ||
         normalized.endsWith(".hf.space") ||
         normalized.endsWith(".huggingface.co") ||
         normalized === "huggingface.co";
