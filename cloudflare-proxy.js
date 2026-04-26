@@ -177,16 +177,16 @@ if (PROXY_URL) {
         const proxiedUrl = new URL(url.pathname + url.search, proxy);
 
         if (request) {
-          const newInit = {
+          const fetchOpts = {
             method: request.method,
             headers: mergedHeaders,
-            body: request.body,
             redirect: request.redirect,
-            duplex: "half",
           };
-          // If body is null/undefined, don't set duplex as some Node versions throw
-          if (!request.body) delete newInit.duplex;
-          return originalFetch(new Request(proxiedUrl, newInit));
+          if (request.body) {
+            fetchOpts.body = request.body;
+            fetchOpts.duplex = "half";
+          }
+          return originalFetch(String(proxiedUrl), fetchOpts);
         }
 
         const newInit = {

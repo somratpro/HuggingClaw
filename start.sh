@@ -157,7 +157,7 @@ CLOUDFLARE_WORKERS_TOKEN="${CLOUDFLARE_WORKERS_TOKEN:-${CLOUDFLARE_API_TOKEN:-}}
 export CLOUDFLARE_WORKERS_TOKEN
 CF_PROXY_ENV_FILE="/tmp/huggingclaw-cloudflare-proxy.env"
 if [ -n "${CLOUDFLARE_WORKERS_TOKEN:-}" ] || [ -n "${CLOUDFLARE_PROXY_URL:-}" ]; then
-  export CLOUDFLARE_PROXY_DOMAINS="${CLOUDFLARE_PROXY_DOMAINS:-api.telegram.org,web.whatsapp.com}"
+  export CLOUDFLARE_PROXY_DOMAINS="${CLOUDFLARE_PROXY_DOMAINS:-api.telegram.org,web.whatsapp.com,googleapis.com}"
   export CLOUDFLARE_PROXY_DEBUG="${CLOUDFLARE_PROXY_DEBUG:-true}"
   echo "☁️ Preparing Cloudflare outbound proxy..."
   python3 /home/node/app/cloudflare-proxy-setup.py || true
