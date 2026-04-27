@@ -161,7 +161,17 @@ def restore_embedded_state() -> None:
             shutil.rmtree(WHATSAPP_CREDS_DIR, ignore_errors=True)
             WHATSAPP_CREDS_DIR.parent.mkdir(parents=True, exist_ok=True)
             shutil.copytree(WHATSAPP_BACKUP_DIR, WHATSAPP_CREDS_DIR)
+            # Lock down dir tree: 0700 on directories, 0600 on every file
+            # so the WhatsApp session secrets can't be read by other users.
             os.chmod(OPENCLAW_HOME / "credentials", 0o700)
+            for path in WHATSAPP_CREDS_DIR.rglob("*"):
+                try:
+                    if path.is_dir():
+                        os.chmod(path, 0o700)
+                    elif path.is_file():
+                        os.chmod(path, 0o600)
+                except OSError:
+                    pass
             print("WhatsApp credentials restored.")
         else:
             print(f"Warning: saved WhatsApp credentials incomplete ({file_count} files), skipping restore.")

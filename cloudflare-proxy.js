@@ -337,11 +337,17 @@ if (PROXY_URL) {
       patchUndiciInstance(undici);
     } catch (e) {}
 
+    // Hook require() to patch any undici instance the moment it loads.
+    // Match either the bare "undici" id or paths whose final package
+    // segment IS undici (e.g. "/foo/node_modules/undici/index.js"). The
+    // earlier substring check `id.includes("/undici/")` would also match
+    // unrelated packages like "super-undici-x".
     const Module = require("module");
     const originalRequire = Module.prototype.require;
+    const UNDICI_PATH_RE = /(?:^|\/)node_modules\/undici(?:\/|$)/;
     Module.prototype.require = function (id) {
       const exports = originalRequire.apply(this, arguments);
-      if (id === "undici" || id.includes("/undici/")) {
+      if (id === "undici" || UNDICI_PATH_RE.test(id)) {
         try { patchUndiciInstance(exports); } catch (e) {}
       }
       return exports;

@@ -154,6 +154,12 @@ def write_env(proxy_url: str, proxy_secret: str) -> None:
         + "\n",
         encoding="utf-8",
     )
+    # Belt-and-suspenders: even with umask 0077 on the parent shell, force
+    # 0600 since the file holds the worker shared secret.
+    try:
+        ENV_FILE.chmod(0o600)
+    except OSError:
+        pass
 
 
 def main() -> int:
@@ -162,10 +168,20 @@ def main() -> int:
     api_token = os.environ.get("CLOUDFLARE_WORKERS_TOKEN", "").strip()
 
     if existing_url:
-      if existing_secret:
+        # Always write the env file so downstream `. $CF_PROXY_ENV_FILE` in
+        # start.sh has CLOUDFLARE_PROXY_URL set even when no secret was
+        # supplied. Empty secret means we send no x-proxy-key header — that
+        # only works if the deployed worker also has no secret baked in.
         write_env(existing_url, existing_secret)
-      print(f"☁️ Using configured Cloudflare proxy: {existing_url}")
-      return 0
+        if not existing_secret:
+            print(
+                "Warning: CLOUDFLARE_PROXY_URL is set but CLOUDFLARE_PROXY_SECRET "
+                "is empty. Requests will succeed only if the deployed worker "
+                "was built without PROXY_SHARED_SECRET; otherwise you'll see "
+                "401 Unauthorized."
+            )
+        print(f"Using configured Cloudflare proxy: {existing_url}")
+        return 0
 
     if not api_token:
         return 0
@@ -214,22 +230,22 @@ def main() -> int:
 
         proxy_url = f"https://{worker_name}.{subdomain}.workers.dev"
         write_env(proxy_url, proxy_secret)
-        print(f"☁️ Cloudflare proxy ready: {proxy_url}")
+        print(f"Cloudflare proxy ready: {proxy_url}")
         return 0
     except urllib.error.HTTPError as error:
         detail = error.read().decode("utf-8", errors="replace")
         if error.code == 403 and '"code":9109' in detail:
             print(
-                "☁️ Cloudflare proxy setup failed: invalid Workers token. "
+                "Cloudflare proxy setup failed: invalid Workers token. "
                 "Use a Cloudflare API Token in CLOUDFLARE_WORKERS_TOKEN "
                 "(not a Global API Key, tunnel token, or worker secret). "
                 "For auto-setup, it should have account-level 'Workers Scripts: Edit'. "
                 "The setup can auto-discover your account; CLOUDFLARE_ACCOUNT_ID is not required."
             )
-        print(f"☁️ Cloudflare proxy setup failed: HTTP {error.code} {detail}")
+        print(f"Cloudflare proxy setup failed: HTTP {error.code} {detail}")
         return 1
     except Exception as error:
-        print(f"☁️ Cloudflare proxy setup failed: {error}")
+        print(f"Cloudflare proxy setup failed: {error}")
         return 1
 
 

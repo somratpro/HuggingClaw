@@ -85,4 +85,9 @@ WORKDIR /home/node/app
 
 EXPOSE 7861
 
+# health-server.js exposes /health on 7861 and proxies to the gateway on 7860.
+# 90s start period covers OpenClaw's plugin install + gateway boot on cold start.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=90s \
+  CMD curl -fsS http://localhost:7861/health || exit 1
+
 CMD ["/home/node/app/start.sh"]

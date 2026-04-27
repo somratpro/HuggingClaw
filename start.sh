@@ -38,13 +38,13 @@ echo ""
 # ── Validate required secrets ──
 ERRORS=""
 if [ -z "$LLM_API_KEY" ]; then
-  ERRORS="${ERRORS}  ❌ LLM_API_KEY is not set\n"
+  ERRORS="${ERRORS}  - LLM_API_KEY is not set\n"
 fi
 if [ -z "$LLM_MODEL" ]; then
-  ERRORS="${ERRORS}  ❌ LLM_MODEL is not set (e.g. google/gemini-2.5-flash, anthropic/claude-sonnet-4-5, openai/gpt-4)\n"
+  ERRORS="${ERRORS}  - LLM_MODEL is not set (e.g. google/gemini-2.5-flash, anthropic/claude-sonnet-4-5, openai/gpt-4)\n"
 fi
 if [ -z "$GATEWAY_TOKEN" ]; then
-  ERRORS="${ERRORS}  ❌ GATEWAY_TOKEN is not set (generate: openssl rand -hex 32)\n"
+  ERRORS="${ERRORS}  - GATEWAY_TOKEN is not set (generate: openssl rand -hex 32)\n"
 fi
 if [ -n "$ERRORS" ]; then
   echo "Missing required secrets:"
@@ -73,7 +73,7 @@ fi
 # Auto-correct Gemini models to use google/ prefix if anthropic/ was mistakenly used
 if [[ "$LLM_MODEL" == "anthropic/gemini"* ]]; then
   LLM_MODEL=$(echo "$LLM_MODEL" | sed 's/^anthropic\//google\//')
-  echo "⚠️  Corrected model from anthropic/gemini* to google/gemini*"
+  echo "Note: corrected model from anthropic/gemini* to google/gemini*"
 fi
 
 # Extract provider prefix from model name (e.g. "google/gemini-2.5-flash" → "google")
@@ -146,7 +146,9 @@ export CLOUDFLARE_WORKERS_TOKEN
 CF_PROXY_ENV_FILE="/tmp/huggingclaw-cloudflare-proxy.env"
 if [ -n "${CLOUDFLARE_WORKERS_TOKEN:-}" ] || [ -n "${CLOUDFLARE_PROXY_URL:-}" ]; then
   export CLOUDFLARE_PROXY_DOMAINS="${CLOUDFLARE_PROXY_DOMAINS:-api.telegram.org,web.whatsapp.com,googleapis.com}"
-  export CLOUDFLARE_PROXY_DEBUG="${CLOUDFLARE_PROXY_DEBUG:-true}"
+  # Default debug off for production. Set CLOUDFLARE_PROXY_DEBUG=true in HF
+  # Space secrets to surface per-request "Redirecting" + error-cause logs.
+  export CLOUDFLARE_PROXY_DEBUG="${CLOUDFLARE_PROXY_DEBUG:-false}"
   echo "Preparing Cloudflare outbound proxy..."
   python3 /home/node/app/cloudflare-proxy-setup.py || true
   if [ -f "$CF_PROXY_ENV_FILE" ]; then
@@ -183,12 +185,20 @@ CONFIG_JSON=$(cat <<'CONFIGEOF'
 CONFIGEOF
 )
 
-# Gateway token
-CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".gateway.auth.token = \"$GATEWAY_TOKEN\"")
-
-# Model configuration at top level
-CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".agents.defaults.model = \"$LLM_MODEL\"")
-CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".logging.level = \"$OPENCLAW_FILE_LOG_LEVEL\" | .logging.consoleLevel = \"$OPENCLAW_CONSOLE_LOG_LEVEL\" | .logging.consoleStyle = \"$OPENCLAW_CONSOLE_LOG_STYLE\"")
+# Apply gateway token, model, and logging in a single jq pass.
+# Uses --arg so values containing quotes/backslashes can't break the JSON or
+# inject jq filters (relevant for OPENCLAW_PASSWORD/GATEWAY_TOKEN below too).
+CONFIG_JSON=$(jq \
+  --arg token "$GATEWAY_TOKEN" \
+  --arg model "$LLM_MODEL" \
+  --arg fileLevel "$OPENCLAW_FILE_LOG_LEVEL" \
+  --arg consoleLevel "$OPENCLAW_CONSOLE_LOG_LEVEL" \
+  --arg consoleStyle "$OPENCLAW_CONSOLE_LOG_STYLE" \
+  '.gateway.auth.token = $token
+   | .agents.defaults.model = $model
+   | .logging.level = $fileLevel
+   | .logging.consoleLevel = $consoleLevel
+   | .logging.consoleStyle = $consoleStyle' <<<"$CONFIG_JSON")
 
 # Optional: dynamic custom OpenAI-compatible provider registration
 CUSTOM_PROVIDER_NAME="${CUSTOM_PROVIDER_NAME:-}"
@@ -206,29 +216,29 @@ if [ -n "$CUSTOM_PROVIDER_NAME" ] || [ -n "$CUSTOM_BASE_URL" ] || [ -n "$CUSTOM_
   CUSTOM_PROVIDER_OK=true
 
   if [ -z "$CUSTOM_PROVIDER_NAME" ] || [ -z "$CUSTOM_BASE_URL" ] || [ -z "$CUSTOM_MODEL_ID" ]; then
-    echo "⚠️  Custom provider skipped: set CUSTOM_PROVIDER_NAME, CUSTOM_BASE_URL, and CUSTOM_MODEL_ID together."
+    echo "Warning: custom provider skipped: set CUSTOM_PROVIDER_NAME, CUSTOM_BASE_URL, and CUSTOM_MODEL_ID together."
     CUSTOM_PROVIDER_OK=false
   fi
 
   case "$CUSTOM_PROVIDER_NORMALIZED" in
     anthropic|openai|openai-codex|google|google-vertex|deepseek|opencode|opencode-go|openrouter|kilocode|vercel-ai-gateway|zai|z-ai|z.ai|zhipu|moonshot|kimi-coding|minimax|qwen|modelstudio|xiaomi|volcengine|volcengine-plan|byteplus|byteplus-plan|qianfan|mistral|mistralai|xai|x-ai|nvidia|cohere|groq|together|huggingface|cerebras|venice|synthetic|github-copilot)
-      echo "⚠️  Custom provider skipped: CUSTOM_PROVIDER_NAME='$CUSTOM_PROVIDER_NAME' conflicts with a built-in provider."
+      echo "Warning: custom provider skipped: CUSTOM_PROVIDER_NAME='$CUSTOM_PROVIDER_NAME' conflicts with a built-in provider."
       CUSTOM_PROVIDER_OK=false
       ;;
   esac
 
   if [[ "$CUSTOM_BASE_URL_NORMALIZED" == */chat/completions ]] || [[ "$CUSTOM_BASE_URL_NORMALIZED" == */completions ]]; then
-    echo "⚠️  Custom provider skipped: CUSTOM_BASE_URL should be the API base URL, not a completions endpoint."
+    echo "Warning: custom provider skipped: CUSTOM_BASE_URL should be the API base URL, not a completions endpoint."
     CUSTOM_PROVIDER_OK=false
   fi
 
   if ! [[ "$CUSTOM_CONTEXT_WINDOW" =~ ^[0-9]+$ ]] || ! [[ "$CUSTOM_MAX_TOKENS" =~ ^[0-9]+$ ]]; then
-    echo "⚠️  Custom provider skipped: CUSTOM_CONTEXT_WINDOW and CUSTOM_MAX_TOKENS must be whole numbers."
+    echo "Warning: custom provider skipped: CUSTOM_CONTEXT_WINDOW and CUSTOM_MAX_TOKENS must be whole numbers."
     CUSTOM_PROVIDER_OK=false
   fi
 
   if [ "$CUSTOM_PROVIDER_OK" = "true" ]; then
-    echo "🔧 Registering custom provider: $CUSTOM_PROVIDER_NAME → $CUSTOM_BASE_URL_NORMALIZED"
+    echo "Registering custom provider: $CUSTOM_PROVIDER_NAME -> $CUSTOM_BASE_URL_NORMALIZED"
     CONFIG_JSON=$(jq \
       --arg provider "$CUSTOM_PROVIDER_NAME" \
       --arg baseUrl "$CUSTOM_BASE_URL_NORMALIZED" \
@@ -252,7 +262,7 @@ if [ -n "$CUSTOM_PROVIDER_NAME" ] || [ -n "$CUSTOM_BASE_URL" ] || [ -n "$CUSTOM_
        }' <<<"$CONFIG_JSON")
 
     if [[ "$LLM_MODEL" != "$CUSTOM_PROVIDER_NAME/"* ]]; then
-      echo "⚠️  Custom provider registered, but LLM_MODEL='$LLM_MODEL' does not start with '$CUSTOM_PROVIDER_NAME/'."
+      echo "Warning: custom provider registered, but LLM_MODEL='$LLM_MODEL' does not start with '$CUSTOM_PROVIDER_NAME/'."
     fi
   fi
 fi
@@ -273,7 +283,15 @@ elif [ "$BROWSER_PLUGIN_MODE" = "auto" ] && [ -n "$BROWSER_EXECUTABLE_PATH" ] &&
   BROWSER_SHOULD_ENABLE=true
 fi
 
-# Restrict bundled plugin loading on HF Spaces so unrelated broken plugins do not crash the gateway after startup.
+# Plugin allow/deny rationale:
+#   ALLOW: device-pair, phone-control, talk-voice are the minimum bundled
+#          plugins that the Control UI/dashboard needs to render correctly
+#          on HF Spaces. Without these the UI shows blank panels.
+#          telegram/whatsapp/browser/acpx are added conditionally below.
+#   DENY:  lmstudio crashes on boot when no local server is reachable;
+#          xai PLUGIN (separate from the xai model PROVIDER) is broken in
+#          current OpenClaw releases and prevents gateway start. Disabling
+#          the plugin does NOT affect xai-as-a-model-provider.
 PLUGIN_ALLOW_JSON='["device-pair","phone-control","talk-voice"]'
 if [ "$ACP_PLUGIN_MODE" = "enabled" ] || [ "$ACP_PLUGIN_MODE" = "auto" ]; then
   PLUGIN_ALLOW_JSON=$(jq '. + ["acpx"]' <<<"$PLUGIN_ALLOW_JSON")
@@ -287,41 +305,52 @@ fi
 if [ "$WHATSAPP_ENABLED_NORMALIZED" = "true" ]; then
   PLUGIN_ALLOW_JSON=$(jq '. + ["whatsapp"]' <<<"$PLUGIN_ALLOW_JSON")
 fi
-CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".plugins.allow = $PLUGIN_ALLOW_JSON")
-CONFIG_JSON=$(echo "$CONFIG_JSON" | jq '.plugins.deny = ["lmstudio","xai"]')
-CONFIG_JSON=$(echo "$CONFIG_JSON" | jq '.plugins.entries.lmstudio.enabled = false | .plugins.entries.xai.enabled = false')
 
-if [ "$ACP_PLUGIN_MODE" = "disabled" ]; then
-  CONFIG_JSON=$(echo "$CONFIG_JSON" | jq '.plugins.entries.acpx.enabled = false')
-fi
+# Apply plugin allow/deny + per-entry toggles in one jq pass.
+ACPX_DISABLED=false
+if [ "$ACP_PLUGIN_MODE" = "disabled" ]; then ACPX_DISABLED=true; fi
+BROWSER_DISABLED=true
+if [ "$BROWSER_SHOULD_ENABLE" = "true" ]; then BROWSER_DISABLED=false; fi
 
-if [ "$BROWSER_SHOULD_ENABLE" != "true" ]; then
-  CONFIG_JSON=$(echo "$CONFIG_JSON" | jq '.plugins.entries.browser.enabled = false | .browser.enabled = false')
-fi
+CONFIG_JSON=$(jq \
+  --argjson allow "$PLUGIN_ALLOW_JSON" \
+  --argjson acpxDisabled "$ACPX_DISABLED" \
+  --argjson browserDisabled "$BROWSER_DISABLED" \
+  '.plugins.allow = $allow
+   | .plugins.deny = ["lmstudio","xai"]
+   | .plugins.entries.lmstudio.enabled = false
+   | .plugins.entries.xai.enabled = false
+   | (if $acpxDisabled then .plugins.entries.acpx.enabled = false else . end)
+   | (if $browserDisabled then
+        .plugins.entries.browser.enabled = false | .browser.enabled = false
+      else . end)' <<<"$CONFIG_JSON")
 
 if [ "$BROWSER_SHOULD_ENABLE" = "true" ]; then
-  CONFIG_JSON=$(echo "$CONFIG_JSON" | jq \
-    ".browser = {
-      \"enabled\": true,
-      \"defaultProfile\": \"openclaw\",
-      \"headless\": true,
-      \"noSandbox\": true,
-      \"executablePath\": \"$BROWSER_EXECUTABLE_PATH\"
-    } | .agents.defaults.sandbox.browser.allowHostControl = true")
+  CONFIG_JSON=$(jq \
+    --arg execPath "$BROWSER_EXECUTABLE_PATH" \
+    '.browser = {
+       "enabled": true,
+       "defaultProfile": "openclaw",
+       "headless": true,
+       "noSandbox": true,
+       "executablePath": $execPath
+     }
+     | .agents.defaults.sandbox.browser.allowHostControl = true' <<<"$CONFIG_JSON")
 fi
 
-# Control UI origin (allow HF Space URL for web UI access)
-if [ -n "${SPACE_HOST:-}" ]; then
-  CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".gateway.controlUi.allowedOrigins = [\"https://${SPACE_HOST}\"]")
-fi
-
-# Disable device auth (pairing) for headless Docker — token-only auth
-CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".gateway.controlUi.dangerouslyDisableDeviceAuth = true")
-
-# Password auth (optional — simpler alternative to token for casual users)
-if [ -n "${OPENCLAW_PASSWORD:-}" ]; then
-  CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".gateway.auth.mode = \"password\" | .gateway.auth.password = \"$OPENCLAW_PASSWORD\"")
-fi
+# Control UI origin (allow HF Space URL for web UI access).
+# Disable device auth (pairing) for headless Docker — token-only auth.
+# Combined into one jq pass; --arg keeps password/host injection-safe.
+CONFIG_JSON=$(jq \
+  --arg spaceHost "${SPACE_HOST:-}" \
+  --arg password "${OPENCLAW_PASSWORD:-}" \
+  '.gateway.controlUi.dangerouslyDisableDeviceAuth = true
+   | (if $spaceHost != "" then
+        .gateway.controlUi.allowedOrigins = ["https://" + $spaceHost]
+      else . end)
+   | (if $password != "" then
+        .gateway.auth.mode = "password" | .gateway.auth.password = $password
+      else . end)' <<<"$CONFIG_JSON")
 
 # Trusted proxies (optional — fixes "Proxy headers detected from untrusted address" on HF Spaces)
 # Set TRUSTED_PROXIES as comma-separated IPs/CIDRs, e.g. "10.20.31.87,10.20.26.157"
@@ -365,12 +394,16 @@ if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
   ')
   
   if [ -n "${TELEGRAM_USER_IDS:-}" ]; then
-    # Convert comma-separated IDs to JSON array
+    # Convert comma-separated IDs to JSON array (already safe — jq -R parses).
     IDS_JSON=$(echo "$TELEGRAM_USER_IDS" | tr ',' '\n' | sed 's/^ *//;s/ *$//' | jq -R . | jq -s .)
-    CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".channels.telegram += {\"dmPolicy\": \"allowlist\", \"allowFrom\": $IDS_JSON}")
+    CONFIG_JSON=$(jq \
+      --argjson ids "$IDS_JSON" \
+      '.channels.telegram += {"dmPolicy": "allowlist", "allowFrom": $ids}' <<<"$CONFIG_JSON")
   elif [ -n "${TELEGRAM_USER_ID:-}" ]; then
-    # Single user (backward compatible)
-    CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".channels.telegram += {\"dmPolicy\": \"allowlist\", \"allowFrom\": [\"$TELEGRAM_USER_ID\"]}")
+    # Single user (backward compatible). --arg keeps quotes/odd chars safe.
+    CONFIG_JSON=$(jq \
+      --arg userId "$TELEGRAM_USER_ID" \
+      '.channels.telegram += {"dmPolicy": "allowlist", "allowFrom": [$userId]}' <<<"$CONFIG_JSON")
   fi
 fi
 
@@ -445,13 +478,13 @@ warmup_browser() {
     for attempt in 1 2 3 4 5; do
       if openclaw browser --browser-profile openclaw start >/dev/null 2>&1; then
         openclaw browser --browser-profile openclaw open about:blank >/dev/null 2>&1 || true
-        echo "  ✅ Managed browser ready"
+        echo "Managed browser ready."
         return 0
       fi
       sleep 2
     done
 
-    echo "  ⚠️ Managed browser warm-up did not complete; first browser action may need a retry"
+    echo "Warning: managed browser warm-up did not complete; first browser action may need a retry."
   ) &
 }
 
@@ -470,15 +503,32 @@ if [ "${GATEWAY_VERBOSE:-0}" = "1" ]; then
   echo "Gateway verbose logging enabled (GATEWAY_VERBOSE=1)"
 fi
 
-# Use stdbuf -oL -eL to ensure logs are not buffered and appear immediately in the console
+# Use stdbuf -oL -eL to ensure logs are not buffered and appear immediately
+# in the console. NOTE: $! captures the LAST pipeline element (tee), not
+# openclaw — fine for passing to `wait` (waits for the whole pipeline to
+# finish), but kill -0 on it is uninformative. We probe TCP instead.
 stdbuf -oL -eL openclaw "${GATEWAY_ARGS[@]}" 2>&1 | tee -a /home/node/.openclaw/gateway.log &
 GATEWAY_PID=$!
 
-# Wait a moment for startup errors
-sleep 3
-if ! kill -0 $GATEWAY_PID 2>/dev/null; then
+# Poll for the gateway to start listening on 7860. OpenClaw can take 20-30s
+# on cold start (plugin install + auto-restore). Bail out early if the
+# pipeline died.
+GATEWAY_READY_TIMEOUT="${GATEWAY_READY_TIMEOUT:-90}"
+ready=false
+for ((i=0; i<GATEWAY_READY_TIMEOUT; i++)); do
+  if (echo > /dev/tcp/127.0.0.1/7860) 2>/dev/null; then
+    ready=true
+    break
+  fi
+  if ! kill -0 "$GATEWAY_PID" 2>/dev/null; then
+    break
+  fi
+  sleep 1
+done
+
+if [ "$ready" != "true" ]; then
   echo ""
-  echo "❌ Gateway failed to start. Last 30 lines of log:"
+  echo "Gateway failed to start. Last 30 lines of log:"
   echo "────────────────────────────────────────────"
   tail -30 /home/node/.openclaw/gateway.log
   exit 1
