@@ -178,9 +178,9 @@ def main() -> int:
                 "Warning: CLOUDFLARE_PROXY_URL is set but CLOUDFLARE_PROXY_SECRET "
                 "is empty. Requests will succeed only if the deployed worker "
                 "was built without PROXY_SHARED_SECRET; otherwise you'll see "
-                "401 Unauthorized."
+                "401 Unauthorized.",
+                file=sys.stderr,
             )
-        print(f"Using configured Cloudflare proxy: {existing_url}")
         return 0
 
     if not api_token:
@@ -230,7 +230,6 @@ def main() -> int:
 
         proxy_url = f"https://{worker_name}.{subdomain}.workers.dev"
         write_env(proxy_url, proxy_secret)
-        print(f"Cloudflare proxy ready: {proxy_url}")
         return 0
     except urllib.error.HTTPError as error:
         detail = error.read().decode("utf-8", errors="replace")
@@ -240,12 +239,13 @@ def main() -> int:
                 "Use a Cloudflare API Token in CLOUDFLARE_WORKERS_TOKEN "
                 "(not a Global API Key, tunnel token, or worker secret). "
                 "For auto-setup, it should have account-level 'Workers Scripts: Edit'. "
-                "The setup can auto-discover your account; CLOUDFLARE_ACCOUNT_ID is not required."
+                "The setup can auto-discover your account; CLOUDFLARE_ACCOUNT_ID is not required.",
+                file=sys.stderr,
             )
-        print(f"Cloudflare proxy setup failed: HTTP {error.code} {detail}")
+        print(f"Cloudflare proxy setup failed: HTTP {error.code} {detail}", file=sys.stderr)
         return 1
     except Exception as error:
-        print(f"Cloudflare proxy setup failed: {error}")
+        print(f"Cloudflare proxy setup failed: {error}", file=sys.stderr)
         return 1
 
 
