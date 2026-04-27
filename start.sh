@@ -132,25 +132,13 @@ mkdir -p /home/node/.openclaw/workspace
 chmod 700 /home/node/.openclaw
 chmod 700 /home/node/.openclaw/credentials
 
-# ── Validate HF token (if provided) ──
-if [ -n "${HF_TOKEN:-}" ]; then
-  echo "🔑 Validating HF token..."
-  HF_AUTH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $HF_TOKEN" https://huggingface.co/api/repos/create --max-time 10 2>/dev/null || echo "000")
-  if [ "$HF_AUTH_STATUS" = "401" ]; then
-    echo "  ⚠️  HF token is invalid or expired! Workspace backup will not work."
-    echo "  Get a new token: https://huggingface.co/settings/tokens"
-  else
-    echo "  ✅ HF token is valid"
-  fi
-fi
-
 # ── Restore workspace/state from HF Dataset ──
 BACKUP_DATASET="${BACKUP_DATASET_NAME:-huggingclaw-backup}"
 if [ -n "${HF_TOKEN:-}" ]; then
-  echo "📦 Restoring workspace and state from HF Dataset..."
+  echo "Restoring workspace from HF Dataset..."
   python3 /home/node/app/workspace-sync.py restore || true
 else
-  echo "HF_TOKEN is not set. Running without dataset persistence."
+  echo "HF_TOKEN not set — running without dataset persistence."
 fi
 
 CLOUDFLARE_WORKERS_TOKEN="${CLOUDFLARE_WORKERS_TOKEN:-${CLOUDFLARE_API_TOKEN:-}}"
@@ -159,11 +147,10 @@ CF_PROXY_ENV_FILE="/tmp/huggingclaw-cloudflare-proxy.env"
 if [ -n "${CLOUDFLARE_WORKERS_TOKEN:-}" ] || [ -n "${CLOUDFLARE_PROXY_URL:-}" ]; then
   export CLOUDFLARE_PROXY_DOMAINS="${CLOUDFLARE_PROXY_DOMAINS:-api.telegram.org,web.whatsapp.com,googleapis.com}"
   export CLOUDFLARE_PROXY_DEBUG="${CLOUDFLARE_PROXY_DEBUG:-true}"
-  echo "☁️ Preparing Cloudflare outbound proxy..."
+  echo "Preparing Cloudflare outbound proxy..."
   python3 /home/node/app/cloudflare-proxy-setup.py || true
   if [ -f "$CF_PROXY_ENV_FILE" ]; then
     . "$CF_PROXY_ENV_FILE"
-    echo "  ✅ Proxy environment loaded: ${CLOUDFLARE_PROXY_URL:-none}"
   fi
 fi
 
@@ -403,59 +390,33 @@ export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--require /home/node/app/ifr
 
 # ── Startup Summary ──
 echo ""
-echo "  ┌──────────────────────────────────────────┐"
-echo "  │  📋 Configuration Summary                │"
-echo "  ├──────────────────────────────────────────┤"
-printf "  │  %-40s │\n" "OpenClaw: $OPENCLAW_DISPLAY_VERSION"
-printf "  │  %-40s │\n" "Model: $LLM_MODEL"
+echo "Version   : ${OPENCLAW_DISPLAY_VERSION}"
+echo "Model     : ${LLM_MODEL}"
 if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
-printf "  │  %-40s │\n" "Telegram: ✅ enabled"
+  echo "Telegram  : enabled"
 else
-printf "  │  %-40s │\n" "Telegram: ❌ not configured"
+  echo "Telegram  : not configured"
 fi
 if [ "$WHATSAPP_ENABLED_NORMALIZED" = "true" ]; then
-printf "  │  %-40s │\n" "WhatsApp: ✅ enabled"
+  echo "WhatsApp  : enabled"
 else
-printf "  │  %-40s │\n" "WhatsApp: ❌ disabled"
-fi
-if [ "$BROWSER_SHOULD_ENABLE" = "true" ]; then
-printf "  │  %-40s │\n" "Browser: ✅ ${BROWSER_EXECUTABLE_PATH}"
-elif [ -n "$BROWSER_EXECUTABLE_PATH" ] && [ -x "$BROWSER_EXECUTABLE_PATH" ]; then
-printf "  │  %-40s │\n" "Browser: ⏸ disabled (${BROWSER_PLUGIN_MODE})"
-else
-printf "  │  %-40s │\n" "Browser: ❌ unavailable"
+  echo "WhatsApp  : disabled"
 fi
 if [ -n "${HF_TOKEN:-}" ]; then
-printf "  │  %-40s │\n" "Backup: ✅ ${BACKUP_DATASET:-huggingclaw-backup} (auto namespace)"
+  echo "Backup    : ${BACKUP_DATASET:-huggingclaw-backup} (every ${SYNC_INTERVAL:-180}s)"
 else
-printf "  │  %-40s │\n" "Backup: ❌ not configured"
+  echo "Backup    : disabled"
 fi
 if [ -n "${CLOUDFLARE_PROXY_URL:-}" ]; then
-printf "  │  %-40s │\n" "Proxy: ☁️ ${CLOUDFLARE_PROXY_URL}"
-fi
-if [ -n "${OPENCLAW_PASSWORD:-}" ]; then
-printf "  │  %-40s │\n" "Auth: 🔑 password"
-else
-printf "  │  %-40s │\n" "Auth: 🔐 token"
+  echo "Proxy     : ${CLOUDFLARE_PROXY_URL}"
 fi
 if [ -n "${SPACE_HOST:-}" ]; then
-printf "  │  %-40s │\n" "Control UI: https://${SPACE_HOST}/app"
-printf "  │  %-40s │\n" "Dashboard: https://${SPACE_HOST}"
+  echo "Control UI: https://${SPACE_HOST}/app"
 fi
-SYNC_STATUS="❌ disabled"
-if [ -n "${HF_TOKEN:-}" ]; then
-  SYNC_STATUS="✅ every ${SYNC_INTERVAL:-180}s"
-fi
-printf "  │  %-40s │\n" "Auto-sync: $SYNC_STATUS"
-if [ -n "${WEBHOOK_URL:-}" ]; then
-printf "  │  %-40s │\n" "Webhooks: ✅ enabled"
-fi
-echo "  └──────────────────────────────────────────┘"
 echo ""
 
 # ── Trigger Webhook on Restart ──
 if [ -n "${WEBHOOK_URL:-}" ]; then
-  echo "🔔 Sending restart webhook..."
   curl -s -X POST "$WEBHOOK_URL" \
        -H "Content-Type: application/json" \
        -d '{"event":"restart", "status":"success", "message":"HuggingClaw gateway has started/restarted.", "model": "'"$LLM_MODEL"'"}' >/dev/null 2>&1 &
@@ -463,18 +424,13 @@ fi
 
 # ── Trap SIGTERM for graceful shutdown ──
 graceful_shutdown() {
-  echo ""
-  echo "🛑 Shutting down gracefully..."
-
+  echo "Shutting down..."
   if [ -f "/home/node/app/workspace-sync.py" ]; then
-    echo "💾 Saving OpenClaw state before exit..."
+    echo "Saving state before exit..."
     python3 /home/node/app/workspace-sync.py sync-once || \
-      echo "  ⚠️ Could not complete shutdown sync"
+      echo "Warning: could not complete shutdown sync"
   fi
-  
-  # Kill background processes
   kill $(jobs -p) 2>/dev/null
-  echo "👋 Goodbye!"
   exit 0
 }
 trap graceful_shutdown SIGTERM SIGINT
@@ -506,13 +462,12 @@ node /home/node/app/health-server.js &
 HEALTH_PID=$!
 
 # ── Launch gateway ──
-echo "🚀 Launching OpenClaw gateway on port 7860..."
-echo ""
+echo "Launching OpenClaw gateway on port 7860..."
 
 GATEWAY_ARGS=(gateway run --port 7860 --bind lan)
 if [ "${GATEWAY_VERBOSE:-0}" = "1" ]; then
   GATEWAY_ARGS+=(--verbose)
-  echo "🔎 Gateway verbose logging enabled (GATEWAY_VERBOSE=1)"
+  echo "Gateway verbose logging enabled (GATEWAY_VERBOSE=1)"
 fi
 
 # Use stdbuf -oL -eL to ensure logs are not buffered and appear immediately in the console
@@ -533,7 +488,7 @@ fi
 if [ "$WHATSAPP_ENABLED_NORMALIZED" = "true" ]; then
   node /home/node/app/wa-guardian.js &
   GUARDIAN_PID=$!
-  echo "🛡️ WhatsApp Guardian started (PID: $GUARDIAN_PID)"
+  echo "WhatsApp Guardian started (PID: $GUARDIAN_PID)"
 fi
 
 # 11.5 Warm up the managed browser so first browser actions have a live tab

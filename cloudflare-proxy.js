@@ -21,7 +21,7 @@ if (
   PROXY_URL = `https://${PROXY_URL}`;
 }
 
-const DEBUG = process.env.CLOUDFLARE_PROXY_DEBUG === "true" || true;
+const DEBUG = process.env.CLOUDFLARE_PROXY_DEBUG === "true";
 const PROXY_SHARED_SECRET = (process.env.CLOUDFLARE_PROXY_SECRET || "").trim();
 const PROXY_DOMAINS = process.env.CLOUDFLARE_PROXY_DOMAINS || "*";
 const BLOCKED_DOMAINS = PROXY_DOMAINS.split(",")
@@ -176,6 +176,23 @@ if (PROXY_URL) {
 
         const proxiedUrl = new URL(url.pathname + url.search, proxy);
 
+        const logProxyError = (promise) => {
+          promise
+            .then(r => {
+              if (DEBUG && !r.ok) {
+                log(`[cloudflare-proxy] Proxy HTTP ${r.status} for ${hostname}: ${r.statusText}`);
+              }
+            })
+            .catch(err => {
+              const cause = err?.cause;
+              const causeStr = cause
+                ? ` | cause: ${cause?.code || cause?.message || String(cause)}`
+                : "";
+              log(`[cloudflare-proxy] Proxy FAILED ${hostname}: ${err?.message}${causeStr}`);
+            });
+          return promise;
+        };
+
         if (request) {
           const fetchOpts = {
             method: request.method,
@@ -186,18 +203,18 @@ if (PROXY_URL) {
             fetchOpts.body = request.body;
             fetchOpts.duplex = "half";
           }
-          return originalFetch(String(proxiedUrl), fetchOpts);
+          return logProxyError(originalFetch(String(proxiedUrl), fetchOpts));
         }
 
         const newInit = {
           ...init,
           headers: mergedHeaders,
         };
-        if (newInit.body && !newInit.duplex) {
+        if (newInit.body instanceof ReadableStream && !newInit.duplex) {
           newInit.duplex = "half";
         }
 
-        return originalFetch(proxiedUrl, newInit);
+        return logProxyError(originalFetch(String(proxiedUrl), newInit));
       };
     }
 
