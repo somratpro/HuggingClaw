@@ -347,12 +347,21 @@ if (PROXY_URL) {
       return exports;
     };
 
-    // Startup banner: only print once for the parent process to avoid the
-    // "active in list mode" banner repeating for every child Node spawn
-    // (NODE_OPTIONS=--require makes this script run in every Node process).
-    if (DEBUG && !process.env.__CF_PROXY_BANNER_SHOWN) {
-      process.env.__CF_PROXY_BANNER_SHOWN = "1";
-      log(`[cloudflare-proxy] active (${PROXY_ALL ? "wildcard" : "list"}) -> ${proxy.hostname}`);
+    // Startup banner: print once across all Node spawns. Use a file marker
+    // because every Node process (health-server, gateway, sync subprocess)
+    // is spawned fresh from bash with NODE_OPTIONS=--require, so an env-var
+    // marker won't propagate. /tmp is per-container so it resets on rebuild.
+    if (DEBUG) {
+      try {
+        require("fs").writeFileSync("/tmp/.cf-proxy-banner-shown", "1", {
+          flag: "wx",
+        });
+        log(
+          `[cloudflare-proxy] active (${PROXY_ALL ? "wildcard" : "list"}) -> ${proxy.hostname}`,
+        );
+      } catch (_) {
+        // marker exists — banner already shown by another process
+      }
     }
   } catch (error) {
     log(`[cloudflare-proxy] Failed to initialize: ${error.message}`);

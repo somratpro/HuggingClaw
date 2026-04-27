@@ -20,13 +20,18 @@ import time
 from pathlib import Path
 
 os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
-
-# Silence huggingface_hub's chatty per-file "No files have been modified..."
-# logs from upload_large_folder. Keep warnings/errors visible.
-logging.getLogger("huggingface_hub").setLevel(logging.WARNING)
+# huggingface_hub reads HF_HUB_VERBOSITY at import time and overrides any
+# logging.getLogger().setLevel() we apply afterwards. Set it before import
+# to silence the "No files have been modified..." spam from
+# upload_large_folder workers (logger.warning level).
+os.environ.setdefault("HF_HUB_VERBOSITY", "error")
 
 from huggingface_hub import HfApi, snapshot_download, upload_folder
 from huggingface_hub.errors import HfHubHTTPError, RepositoryNotFoundError
+
+# Belt-and-suspenders: also raise the level after import in case the env var
+# wasn't honored (older hub versions, or message logged via a sub-logger).
+logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
 
 OPENCLAW_HOME = Path("/home/node/.openclaw")
 WORKSPACE = OPENCLAW_HOME / "workspace"
@@ -96,7 +101,7 @@ def snapshot_state_into_workspace() -> None:
             elif source_path.is_file():
                 shutil.copy2(source_path, backup_path)
     except Exception as exc:
-        print(f"  ⚠️ Could not snapshot OpenClaw state: {exc}")
+        print(f"Warning: could not snapshot OpenClaw state: {exc}")
 
     try:
         if not WHATSAPP_ENABLED:
@@ -107,7 +112,7 @@ def snapshot_state_into_workspace() -> None:
         if RESET_MARKER.exists():
             if WHATSAPP_BACKUP_DIR.exists():
                 shutil.rmtree(WHATSAPP_BACKUP_DIR, ignore_errors=True)
-                print("🧹 Removed backed-up WhatsApp credentials after reset request.")
+                print("Removed backed-up WhatsApp credentials after reset request.")
             RESET_MARKER.unlink(missing_ok=True)
             return
 
@@ -117,7 +122,7 @@ def snapshot_state_into_workspace() -> None:
         file_count = count_files(WHATSAPP_CREDS_DIR)
         if file_count < 2:
             if file_count > 0:
-                print(f"📦 WhatsApp backup skipped: credentials incomplete ({file_count} files).")
+                print(f"WhatsApp backup skipped: credentials incomplete ({file_count} files).")
             return
 
         WHATSAPP_BACKUP_DIR.parent.mkdir(parents=True, exist_ok=True)
@@ -125,13 +130,12 @@ def snapshot_state_into_workspace() -> None:
             shutil.rmtree(WHATSAPP_BACKUP_DIR, ignore_errors=True)
         shutil.copytree(WHATSAPP_CREDS_DIR, WHATSAPP_BACKUP_DIR)
     except Exception as exc:
-        print(f"  ⚠️ Could not snapshot WhatsApp state: {exc}")
+        print(f"Warning: could not snapshot WhatsApp state: {exc}")
 
 
 def restore_embedded_state() -> None:
     state_backup_root = STATE_DIR / "openclaw"
     if state_backup_root.is_dir():
-        print("🧠 Restoring OpenClaw state...")
         for source_path in state_backup_root.iterdir():
             name = source_path.name
             if name in EXCLUDED_STATE_NAMES:
@@ -139,7 +143,6 @@ def restore_embedded_state() -> None:
                     shutil.rmtree(source_path, ignore_errors=True)
                 else:
                     source_path.unlink(missing_ok=True)
-                print(f"  ↷ Skipping stale backup entry: {name}")
                 continue
             target_path = OPENCLAW_HOME / name
             shutil.rmtree(target_path, ignore_errors=True)
@@ -150,19 +153,18 @@ def restore_embedded_state() -> None:
                 shutil.copytree(source_path, target_path)
             else:
                 shutil.copy2(source_path, target_path)
-        print("  ✅ OpenClaw state restored")
+        print("OpenClaw state restored.")
 
     if WHATSAPP_ENABLED and WHATSAPP_BACKUP_DIR.is_dir():
         file_count = count_files(WHATSAPP_BACKUP_DIR)
         if file_count >= 2:
-            print("📱 Restoring WhatsApp credentials...")
             shutil.rmtree(WHATSAPP_CREDS_DIR, ignore_errors=True)
             WHATSAPP_CREDS_DIR.parent.mkdir(parents=True, exist_ok=True)
             shutil.copytree(WHATSAPP_BACKUP_DIR, WHATSAPP_CREDS_DIR)
             os.chmod(OPENCLAW_HOME / "credentials", 0o700)
-            print("  ✅ WhatsApp credentials restored")
+            print("WhatsApp credentials restored.")
         else:
-            print(f"  ⚠️ Saved WhatsApp credentials look incomplete ({file_count} files), skipping restore.")
+            print(f"Warning: saved WhatsApp credentials incomplete ({file_count} files), skipping restore.")
 
 
 def resolve_backup_namespace() -> str:
@@ -383,21 +385,21 @@ def loop() -> int:
         write_status("configured", f"Backup loop active for {repo_id} with {INTERVAL}s interval.")
     except Exception as exc:
         write_status("error", str(exc))
-        print(f"📁 Workspace sync: {exc}")
+        print(f"Workspace sync error: {exc}")
         return 1
 
     last_fingerprint = fingerprint_dir(WORKSPACE)
     last_marker = metadata_marker(WORKSPACE)
 
     time.sleep(INITIAL_DELAY)
-    print(f"🔄 Workspace sync started: every {INTERVAL}s → {repo_id}")
+    print(f"Workspace sync started: every {INTERVAL}s -> {repo_id}")
 
     while not STOP_EVENT.is_set():
         try:
             last_fingerprint, last_marker = sync_once(last_fingerprint, last_marker)
         except Exception as exc:
             write_status("error", f"Sync failed: {exc}")
-            print(f"📁 Workspace sync failed: {exc}")
+            print(f"Workspace sync failed: {exc}")
 
         if STOP_EVENT.wait(INTERVAL):
             break
@@ -420,7 +422,7 @@ def main() -> int:
             return 0
         except Exception as exc:
             write_status("error", f"Shutdown sync failed: {exc}")
-            print(f"📁 Workspace sync: shutdown sync failed: {exc}")
+            print(f"Workspace sync: shutdown sync failed: {exc}")
             return 1
     if command == "loop":
         return loop()
