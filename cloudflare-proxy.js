@@ -56,10 +56,6 @@ if (PROXY_URL) {
           normalized === domain || normalized.endsWith(`.${domain}`),
       );
 
-      if (DEBUG && should && normalized !== proxy.hostname) {
-        log(`[cloudflare-proxy] Host match: ${normalized}`);
-      }
-
       return should;
     };
 
@@ -176,7 +172,7 @@ if (PROXY_URL) {
 
         const proxiedUrl = new URL(url.pathname + url.search, proxy);
 
-        const logProxyError = (promise) => {
+        const logProxyError = (promise, debugInfo) => {
           promise
             .then(r => {
               if (DEBUG && !r.ok) {
@@ -189,6 +185,9 @@ if (PROXY_URL) {
                 ? ` | cause: ${cause?.code || cause?.message || String(cause)}`
                 : "";
               log(`[cloudflare-proxy] Proxy FAILED ${hostname}: ${err?.message}${causeStr}`);
+              if (DEBUG && debugInfo) {
+                log(`[cloudflare-proxy] Debug: ${debugInfo}`);
+              }
             });
           return promise;
         };
@@ -203,18 +202,46 @@ if (PROXY_URL) {
             fetchOpts.body = request.body;
             fetchOpts.duplex = "half";
           }
-          return logProxyError(originalFetch(String(proxiedUrl), fetchOpts));
+          return logProxyError(
+            originalFetch(String(proxiedUrl), fetchOpts),
+            `request-mode method=${request.method} hasBody=${!!request.body}`,
+          );
         }
 
+        // Build a fresh init: do NOT spread `init` because it may carry a
+        // `dispatcher`/`client` pinned to the original target's connection
+        // pool, which causes undici to throw UND_ERR_INVALID_ARG when we
+        // change the origin. Forward only well-known fetch options.
         const newInit = {
-          ...init,
+          method: init?.method || "GET",
           headers: mergedHeaders,
         };
-        if (newInit.body instanceof ReadableStream && !newInit.duplex) {
-          newInit.duplex = "half";
+        if (init?.body != null) {
+          newInit.body = init.body;
+          if (init.body instanceof ReadableStream) {
+            newInit.duplex = init.duplex || "half";
+          }
         }
+        if (init?.signal) newInit.signal = init.signal;
+        if (init?.redirect) newInit.redirect = init.redirect;
+        if (init?.credentials) newInit.credentials = init.credentials;
+        if (init?.cache) newInit.cache = init.cache;
+        if (init?.mode) newInit.mode = init.mode;
+        if (init?.referrer) newInit.referrer = init.referrer;
+        if (init?.referrerPolicy) newInit.referrerPolicy = init.referrerPolicy;
+        if (init?.integrity) newInit.integrity = init.integrity;
+        if (init?.keepalive != null) newInit.keepalive = init.keepalive;
 
-        return logProxyError(originalFetch(String(proxiedUrl), newInit));
+        const bodyType = init?.body == null
+          ? "none"
+          : init.body instanceof ReadableStream
+            ? "ReadableStream"
+            : (init.body?.constructor?.name || typeof init.body);
+
+        return logProxyError(
+          originalFetch(String(proxiedUrl), newInit),
+          `init-mode method=${newInit.method} body=${bodyType} initKeys=${Object.keys(init || {}).join(",")}`,
+        );
       };
     }
 
@@ -320,9 +347,12 @@ if (PROXY_URL) {
       return exports;
     };
 
-    if (DEBUG) {
-      log(`[cloudflare-proxy] Transparent proxy active in ${PROXY_ALL ? "wildcard" : "list"} mode`);
-      log(`[cloudflare-proxy] Target proxy: ${proxy.hostname}`);
+    // Startup banner: only print once for the parent process to avoid the
+    // "active in list mode" banner repeating for every child Node spawn
+    // (NODE_OPTIONS=--require makes this script run in every Node process).
+    if (DEBUG && !process.env.__CF_PROXY_BANNER_SHOWN) {
+      process.env.__CF_PROXY_BANNER_SHOWN = "1";
+      log(`[cloudflare-proxy] active (${PROXY_ALL ? "wildcard" : "list"}) -> ${proxy.hostname}`);
     }
   } catch (error) {
     log(`[cloudflare-proxy] Failed to initialize: ${error.message}`);

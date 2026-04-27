@@ -9,6 +9,7 @@ remotes or requiring a manual HF_USERNAME secret.
 
 import hashlib
 import json
+import logging
 import os
 import shutil
 import signal
@@ -19,6 +20,10 @@ import time
 from pathlib import Path
 
 os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+
+# Silence huggingface_hub's chatty per-file "No files have been modified..."
+# logs from upload_large_folder. Keep warnings/errors visible.
+logging.getLogger("huggingface_hub").setLevel(logging.WARNING)
 
 from huggingface_hub import HfApi, snapshot_download, upload_folder
 from huggingface_hub.errors import HfHubHTTPError, RepositoryNotFoundError
