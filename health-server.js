@@ -13,7 +13,7 @@ const TELEGRAM_ENABLED = !!process.env.TELEGRAM_BOT_TOKEN;
 const WHATSAPP_ENABLED = /^true$/i.test(process.env.WHATSAPP_ENABLED || "");
 const WHATSAPP_STATUS_FILE = "/tmp/huggingclaw-wa-status.json";
 const HF_BACKUP_ENABLED = !!process.env.HF_TOKEN;
-const SYNC_INTERVAL = process.env.SYNC_INTERVAL || "600";
+const SYNC_INTERVAL = process.env.SYNC_INTERVAL || "180";
 const DASHBOARD_BASE = "/dashboard";
 const DASHBOARD_STATUS_PATH = `${DASHBOARD_BASE}/status`;
 const DASHBOARD_HEALTH_PATH = `${DASHBOARD_BASE}/health`;
@@ -134,6 +134,14 @@ function isRateLimited(req) {
   uptimerobotRateMap.set(ip, recent);
   return recent.length > UPTIMEROBOT_RATE_MAX;
 }
+
+// Prune stale rate-limit buckets every 5 minutes to prevent unbounded growth.
+setInterval(() => {
+  const cutoff = Date.now() - UPTIMEROBOT_RATE_WINDOW_MS;
+  for (const [ip, timestamps] of uptimerobotRateMap) {
+    if (timestamps.every((ts) => ts < cutoff)) uptimerobotRateMap.delete(ip);
+  }
+}, 5 * 60 * 1000).unref();
 
 function isAllowedUptimeSetupOrigin(req) {
   const host = String(req.headers.host || "").toLowerCase();

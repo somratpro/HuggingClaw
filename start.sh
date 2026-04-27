@@ -450,9 +450,12 @@ echo ""
 
 # ── Trigger Webhook on Restart ──
 if [ -n "${WEBHOOK_URL:-}" ]; then
+  WEBHOOK_BODY=$(jq -n \
+    --arg model "$LLM_MODEL" \
+    '{"event":"restart","status":"success","message":"HuggingClaw gateway has started/restarted.","model":$model}')
   curl -s -X POST "$WEBHOOK_URL" \
        -H "Content-Type: application/json" \
-       -d '{"event":"restart", "status":"success", "message":"HuggingClaw gateway has started/restarted.", "model": "'"$LLM_MODEL"'"}' >/dev/null 2>&1 &
+       -d "$WEBHOOK_BODY" >/dev/null 2>&1 &
 fi
 
 # ── Trap SIGTERM for graceful shutdown ──

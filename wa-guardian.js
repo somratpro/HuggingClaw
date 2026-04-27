@@ -9,7 +9,12 @@
 
 const fs = require("fs");
 const path = require("path");
-const { WebSocket } = require('/home/node/.openclaw/openclaw-app/node_modules/ws');
+let WebSocket;
+try {
+  ({ WebSocket } = require('ws'));
+} catch (_) {
+  ({ WebSocket } = require('/home/node/.openclaw/openclaw-app/node_modules/ws'));
+}
 const { randomUUID } = require('node:crypto');
 
 const GATEWAY_URL = "ws://127.0.0.1:7860";
@@ -76,7 +81,8 @@ async function createConnection() {
     let resolved = false;
 
     ws.on("message", (data) => {
-      const msg = JSON.parse(data.toString());
+      let msg;
+      try { msg = JSON.parse(data.toString()); } catch { return; }
 
       if (msg.type === "event" && msg.event === "connect.challenge") {
         ws.send(JSON.stringify({
@@ -123,7 +129,8 @@ async function callRpc(ws, method, params) {
   return new Promise((resolve, reject) => {
     const id = randomUUID();
     const handler = (data) => {
-      const msg = JSON.parse(data.toString());
+      let msg;
+      try { msg = JSON.parse(data.toString()); } catch { return; }
       if (msg.id === id) {
         ws.removeListener("message", handler);
         if (msg.ok === false) {
@@ -170,7 +177,7 @@ async function checkStatus() {
     isWaiting = true;
     writeStatus({ configured: true, connected: false, pairing: true });
     if (!hasShownWaitMessage) {
-      console.log("\n[guardian] 📱 WhatsApp pairing in progress. Please scan the QR code in the Control UI.");
+      console.log("\n[guardian] WhatsApp pairing in progress. Please scan the QR code in the Control UI.");
       hasShownWaitMessage = true;
     }
 
@@ -192,7 +199,7 @@ async function checkStatus() {
       if (linkedAfter515) {
         console.log("[guardian] 515 after scan: credentials saved, reloading config to start WhatsApp...");
       } else {
-        console.log("[guardian] ✅ Pairing completed! Reloading config...");
+        console.log("[guardian] Pairing completed! Reloading config...");
       }
 
       const getRes = await callRpc(ws, "config.get", {});
@@ -241,6 +248,6 @@ if (!WHATSAPP_ENABLED) {
 }
 
 writeStatus({ configured: true, connected: false, pairing: false });
-console.log("[guardian] ⚔️ WhatsApp Guardian active. Monitoring pairing status...");
+console.log("[guardian] WhatsApp Guardian active. Monitoring pairing status...");
 setInterval(checkStatus, CHECK_INTERVAL);
 setTimeout(checkStatus, 15000);

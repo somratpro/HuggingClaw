@@ -65,7 +65,6 @@ RUN ln -s /home/node/.openclaw/openclaw-app/openclaw.mjs /usr/local/bin/openclaw
 # Copy HuggingClaw files
 COPY --chown=1000:1000 cloudflare-proxy.js /opt/cloudflare-proxy.js
 COPY --chown=1000:1000 cloudflare-proxy-setup.py /home/node/app/cloudflare-proxy-setup.py
-COPY --chown=1000:1000 cloudflare-worker.js /home/node/app/cloudflare-worker.js
 COPY --chown=1000:1000 health-server.js /home/node/app/health-server.js
 COPY --chown=1000:1000 iframe-fix.cjs /home/node/app/iframe-fix.cjs
 COPY --chown=1000:1000 start.sh /home/node/app/start.sh
