@@ -374,11 +374,31 @@ HuggingClaw/
 - **UI blocked (CORS):** Set `ALLOWED_ORIGINS=https://your-space-name.hf.space`.
 - **Version mismatches:** Pin a specific OpenClaw build with the `OPENCLAW_VERSION` Variable in HF Spaces, or `--build-arg OPENCLAW_VERSION=...` locally.
 
+## 🌟 More Projects
+
+Similar projects by [@somratpro](https://github.com/somratpro) — all free, one-click deploy on HF Spaces:
+
+| Project | What it runs | HF Space | GitHub |
+| :--- | :--- | :--- | :--- |
+| **HuggingClip** | Paperclip — AI agent orchestration platform | [Space](https://huggingface.co/spaces/somratpro/HuggingClip) | [Repo](https://github.com/somratpro/huggingclip) |
+| **Hugging8n** | n8n — workflow & automation platform | [Space](https://huggingface.co/spaces/somratpro/Hugging8n) | [Repo](https://github.com/somratpro/hugging8n) |
+
 ## 📚 Links
 
 - [OpenClaw Docs](https://docs.openclaw.ai)  
 - [OpenClaw GitHub](https://github.com/openclaw/openclaw)  
 - [HuggingFace Spaces Docs](https://huggingface.co/docs/hub/spaces)  
+
+## ❤️ Support
+
+If HuggingClaw saves you time, consider buying me a coffee to keep the projects alive!
+
+**USDT (TRC-20 / TRON network only)**
+```
+TELx8TJz1W1h7n6SgpgGNNGZXpJCEUZrdB
+```
+> [!WARNING]
+> Send **USDT on TRC-20 network only**. Sending other tokens or using a different network will result in permanent loss.
 
 ## 🤝 Contributing
 
