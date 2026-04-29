@@ -9,13 +9,13 @@ pinned: true
 license: mit
 secrets:
   - name: LLM_API_KEY
-    description: Your LLM provider API key (e.g. Anthropic, OpenAI, OpenRouter).
+    description: "Your LLM provider API key (e.g. Anthropic, OpenAI, Google, OpenRouter)."
   - name: LLM_MODEL
-    description: The model ID to use, e.g. openai/gpt-4o or google/gemini-2.5-flash.
+    description: "Model ID to use, e.g. google/gemini-2.5-flash or openai/gpt-4o."
   - name: GATEWAY_TOKEN
-    description: A strong password or token to secure your OpenClaw Control UI.
+    description: "Strong token to secure your OpenClaw Control UI (generate: openssl rand -hex 32)."
   - name: CLOUDFLARE_WORKERS_TOKEN
-    description: Optional Cloudflare API token for automatic Cloudflare Worker proxy setup.
+    description: "Cloudflare API token — auto-creates a Worker proxy for Telegram, WhatsApp, and Google APIs."
 ---
 
 <!-- Badges -->
