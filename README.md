@@ -114,53 +114,34 @@ To chat via Telegram:
 | `TELEGRAM_USER_ID` | — | Single Telegram user ID allowlist |
 | `TELEGRAM_USER_IDS` | — | Comma-separated Telegram user IDs for team access |
 
-## 🌐 Cloudflare Proxy *(Optional)*
+## 🌐 Cloudflare Proxy Setup
 
-Hugging Face Spaces sometimes blocks outgoing connections to Telegram, WhatsApp-related APIs, Google integrations, and other external services. HuggingClaw includes the same transparent Cloudflare proxy approach used in Hugging8n.
+Hugging Face Free Tier often restricts outbound connections to services like Telegram, Discord, and WhatsApp. HuggingClaw solves this with a **Transparent Outbound Proxy** via Cloudflare Workers.
 
-Automatic setup:
+### ⚡ Automatic Setup (Recommended)
 
-1. Create a Cloudflare API Token for your account's Workers.
-2. Add `CLOUDFLARE_WORKERS_TOKEN` as a Space secret.
-3. Restart the Space.
+This is the easiest way. HuggingClaw will handle the deployment for you.
 
-Recommended token setup:
+1. Create a **Cloudflare API Token**:
+   - Go to [API Tokens](https://dash.cloudflare.com/profile/api-tokens).
+   - Create Token -> **Edit Cloudflare Workers** template.
+   - Ensure it has `Account: Workers Scripts: Edit` permissions.
+2. Add the token as a secret named `CLOUDFLARE_WORKERS_TOKEN` in your Space Settings.
 
-- Secret name: `CLOUDFLARE_WORKERS_TOKEN`
-- Token type: `API Token`
-- Account permission: `Workers Scripts: Edit`
-- Resource scope: your target Cloudflare account
-- Account auto-discovery is built in; `CLOUDFLARE_ACCOUNT_ID` is not required
+**What happens next?**
 
-Do not use a Global API key, tunnel token, worker secret, or another Cloudflare credential here.
+- HuggingClaw automatically creates a Worker named after your Space host.
+- It generates a secure, private `CLOUDFLARE_PROXY_SECRET`.
+- All restricted outbound traffic is automatically routed through this Worker.
 
-HuggingClaw will:
+### 🛠️ Manual Setup
 
-- create or update a Worker named from your Space host
-- generate a private shared secret automatically
-- export `CLOUDFLARE_PROXY_URL` and `CLOUDFLARE_PROXY_SECRET` before OpenClaw starts
-- transparently proxy outbound external requests through Cloudflare by default
+If you prefer to manage the Worker yourself:
 
-Default behavior:
-
-- `CLOUDFLARE_PROXY_DOMAINS=*`
-- all external traffic is proxied
-- Hugging Face internal hosts stay direct automatically
-
-That wider default is intentional so Telegram, WhatsApp-related APIs, Google integrations, and other external providers work without extra domain tuning.
-
-Optional variables:
-
-| Variable | Default | Description |
-| :--- | :--- | :--- |
-| `CLOUDFLARE_WORKERS_TOKEN` | — | Cloudflare API token for automatic Worker setup |
-| `CLOUDFLARE_ACCOUNT_ID` | auto | Optional Cloudflare account ID override if you want to pin a specific account |
-| `CLOUDFLARE_WORKER_NAME` | derived from Space host | Optional Worker script name |
-| `CLOUDFLARE_PROXY_URL` | auto | Use an existing Worker URL instead of auto-provisioning |
-| `CLOUDFLARE_PROXY_SECRET` | auto | Optional shared secret override |
-| `CLOUDFLARE_PROXY_DOMAINS` | `*` | Comma-separated proxied domains or `*` for all external traffic |
-
-Manual setup is also available with [cloudflare-worker.js](/Users/somrat/Development/hf-space/HuggingClaw/cloudflare-worker.js) if you prefer to deploy the Worker yourself.
+1. Create a new Cloudflare Worker.
+2. Paste the code from [cloudflare-worker.js](./cloudflare-worker.js) and deploy.
+3. Add the Worker URL to your Space as `CLOUDFLARE_PROXY_URL`.
+4. (Optional) Set a `CLOUDFLARE_PROXY_SECRET` in both the Worker (as a variable) and the Space (as a secret).
 
 ## 💬 WhatsApp Setup *(Optional)*
 
@@ -172,47 +153,27 @@ To use WhatsApp, enable the channel and scan the QR code from the Control UI (**
 
 ## 💾 Workspace Backup *(Optional)*
 
-As of **v1.4.0**, HuggingClaw uses the safer API-based backup flow by default: no token-bearing git remote is configured, and `HF_USERNAME` is usually optional.
+HuggingClaw automatically syncs your workspace (chats, settings, sessions) to a private HF Dataset named `huggingclaw-backup`.
 
-For persistent chat history and configuration, HuggingClaw can sync your workspace to a private HuggingFace Dataset. On first run, it will automatically create (or use) the Dataset repo `<your-account>/huggingclaw-backup`, restore your workspace on startup, and sync changes periodically. In most cases, `HF_USERNAME` is no longer required because HuggingClaw can derive the namespace from your token automatically.
+- **Persistence:** Survived restarts and restores your state on boot.
+- **WhatsApp:** Stores session credentials so you don't have to scan the QR code every time.
+- **Interval:** Syncs every 3 minutes by default.
 
 | Variable | Default | Description |
 | :--- | :--- | :--- |
-| `HF_USERNAME` | — | Optional override for the HuggingFace username/namespace |
-| `HF_TOKEN` | — | HF token with write access |
-| `BACKUP_DATASET_NAME` | `huggingclaw-backup` | Dataset name for backup repo |
-| `SYNC_INTERVAL` | `180` | Sync interval in seconds |
-
-> [!TIP]
-> This backup also stores a hidden copy of your WhatsApp session credentials, allowing paired logins to survive Space restarts automatically.
+| `HF_TOKEN` | — | HF token with **Write** access |
+| `SYNC_INTERVAL` | `180` | Backup frequency in seconds |
 
 ## 💓 Staying Alive *(Recommended on Free HF Spaces)*
 
-Free Hugging Face Spaces can still sleep. HuggingClaw does not rely on internal self-pings anymore. To help keep a public Space awake, set up an external UptimeRobot monitor from the dashboard.
+To help keep your Space awake, set up an external [UptimeRobot](https://uptimerobot.com/) monitor directly from the dashboard UI.
 
-Use the **Main API key** from UptimeRobot.
-Do **not** use the `Read-only API key` or a `Monitor-specific API key`.
-
-Setup:
-
-1. Open `/`.
-2. Find **Keep Space Awake**.
+1. Open your Space's dashboard (`/`).
+2. Find the **Keep Space Awake** section.
 3. Paste your UptimeRobot **Main API key**.
 4. Click **Create Monitor**.
 
-What happens next:
-
-- HuggingClaw creates a monitor for `https://your-space.hf.space/health`
-- UptimeRobot keeps pinging it from outside Hugging Face
-- You only need to do this once
-
-You do **not** need to add this key to Hugging Face Space Secrets.
-The dashboard helper also rate-limits setup requests and rejects cross-origin submissions.
-
-Note:
-
-- This works for **public** Spaces.
-- It does **not** work reliably for **private** Spaces, because external monitors cannot access private HF health URLs.
+HuggingClaw will automatically create a monitor for your Space's `/health` endpoint.
 
 ## 🔔 Webhooks *(Optional)*
 
@@ -235,38 +196,24 @@ Configure password access and network restrictions:
 
 ## 🤖 LLM Providers
 
-HuggingClaw supports **all providers** from OpenClaw. Set `LLM_MODEL=<provider/model>` and the provider is auto-detected. For example:
+HuggingClaw supports **all providers** from OpenClaw. Set `LLM_MODEL=<provider/model>` and the provider is auto-detected.
 
-| Provider         | Prefix          | Example Model                         | API Key Source                                       |
-| :--------------- | :-------------- | :------------------------------------ | :--------------------------------------------------- |
-| **Anthropic**    | `anthropic/`    | `anthropic/claude-sonnet-4-6`         | [Anthropic Console](https://console.anthropic.com/) |
-| **OpenAI**       | `openai/`       | `openai/gpt-5.4`                      | [OpenAI Platform](https://platform.openai.com/)     |
-| **Google**       | `google/`       | `google/gemini-2.5-flash`             | [AI Studio](https://ai.google.dev/)                  |
-| **DeepSeek**     | `deepseek/`     | `deepseek/deepseek-v3.2`              | [DeepSeek](https://platform.deepseek.com)            |
-| **xAI (Grok)**   | `xai/`          | `xai/grok-4`                          | [xAI](https://console.x.ai)                          |
-| **Mistral**      | `mistral/`      | `mistral/mistral-large-latest`        | [Mistral Console](https://console.mistral.ai)        |
-| **Moonshot**     | `moonshot/`     | `moonshot/kimi-k2.5`                  | [Moonshot](https://platform.moonshot.cn)             |
-| **Cohere**       | `cohere/`       | `cohere/command-a`                    | [Cohere Dashboard](https://dashboard.cohere.com)    |
-| **Groq**         | `groq/`         | `groq/mixtral-8x7b-32768`             | [Groq](https://console.groq.com)                     |
-| **MiniMax**      | `minimax/`      | `minimax/minimax-m2.7`                | [MiniMax](https://platform.minimax.io)               |
-| **NVIDIA**       | `nvidia/`       | `nvidia/nemotron-3-super-120b-a12b`   | [NVIDIA API](https://api.nvidia.com)                |
-| **Z.ai (GLM)**   | `zai/`          | `zai/glm-5`                           | [Z.ai](https://z.ai)                                 |
-| **Volcengine**   | `volcengine/`   | `volcengine/doubao-seed-1-8-251228`   | [Volcengine](https://www.volcengine.com)            |
-| **HuggingFace**  | `huggingface/`  | `huggingface/deepseek-ai/DeepSeek-R1` | [HF Tokens](https://huggingface.co/settings/tokens) |
-| **OpenCode Zen** | `opencode/`     | `opencode/claude-opus-4-6`            | [OpenCode.ai](https://opencode.ai/auth)              |
-| **OpenCode Go**  | `opencode-go/`  | `opencode-go/kimi-k2.5`               | [OpenCode.ai](https://opencode.ai/auth)              |
-| **Kilo Gateway** | `kilocode/`     | `kilocode/anthropic/claude-opus-4.6`  | [Kilo.ai](https://kilo.ai)                           |
+<details>
+<summary><b>Click to see supported providers and examples</b></summary>
 
-### OpenRouter – 200+ Models with One Key
+| Provider | Prefix | Example Model |
+| :--- | :--- | :--- |
+| **Anthropic** | `anthropic/` | `anthropic/claude-3-5-sonnet-latest` |
+| **OpenAI** | `openai/` | `openai/gpt-4o` |
+| **Google** | `google/` | `google/gemini-2.0-flash` |
+| **DeepSeek** | `deepseek/` | `deepseek/deepseek-chat` |
+| **xAI (Grok)** | `xai/` | `xai/grok-2-latest` |
+| **Mistral** | `mistral/` | `mistral/mistral-large-latest` |
+| **HuggingFace** | `huggingface/` | `huggingface/deepseek-ai/DeepSeek-R1` |
+| **OpenRouter** | `openrouter/` | `openrouter/anthropic/claude-3.5-sonnet` |
 
-Get an [OpenRouter](https://openrouter.ai) API key to use *all* providers. For example:
-
-```bash
-LLM_API_KEY=sk-or-v1-xxxxxxxx
-LLM_MODEL=openrouter/openai/gpt-5.4
-```
-
-Popular options include `openrouter/google/gemini-2.5-flash` or `openrouter/meta-llama/llama-3.3-70b-instruct`.
+*And many more: Cohere, Groq, NVIDIA, Mistral, Moonshot, etc.*
+</details>
 
 ### Any Other Provider
 
@@ -340,27 +287,26 @@ openclaw channels login --gateway https://YOUR_SPACE_NAME.hf.space
 
 ## 🏗️ Architecture
 
-```bash
-HuggingClaw/
-├── Dockerfile          # Multi-stage build using pre-built OpenClaw image
-├── start.sh            # Config generator, validator, and orchestrator
-├── workspace-sync.py   # Syncs workspace/state to HF Datasets via huggingface_hub
-├── health-server.js    # /health endpoint for uptime checks
-├── cloudflare-proxy.js # Transparent outbound proxy for blocked domains
-├── .env.example        # Environment variable reference
-└── README.md           # (this file)
+HuggingClaw uses a multi-layered approach to ensure stability and persistence on Hugging Face's ephemeral infrastructure.
+
+<details>
+<summary><b>Click to view technical details</b></summary>
+
+- **Dashboard (`/`)**: Management, monitoring, and keep-alive tools.
+- **Control UI (`/gateway`)**: Secure interface for managing agents and channels.
+- **Health Check (`/health`)**: Endpoint for uptime monitoring and readiness probes.
+- **Sync Engine**: Python background process managing HF Dataset persistence.
+- **Transparent Proxy**: Interceptor for requests to blocked domains (Telegram, etc.).
 
 **Startup sequence:**
-1. Validate required secrets (fail fast with clear error).
-2. Check HF token (warn if expired or missing).
-3. Resolve the backup namespace from `HF_USERNAME`, `SPACE_AUTHOR_NAME`, or the HF token.
-4. Auto-create backup dataset if missing and restore workspace/state from it.
-5. Generate `openclaw.json` from environment variables.
-6. Print startup summary.
-7. Launch background tasks (auto-sync and optional channel helpers).
-8. Launch the OpenClaw gateway (start listening).
-9. On `SIGTERM`, save workspace and exit cleanly.
-```
+
+1. Validate required secrets and check HF token.
+2. Resolve backup namespace and restore workspace from HF Dataset.
+3. Generate `openclaw.json` configuration.
+4. Launch background tasks (auto-sync, channel helpers).
+5. Start OpenClaw gateway and listen for connections.
+
+</details>
 
 ## 🐛 Troubleshooting
 
@@ -394,9 +340,11 @@ Similar projects by [@somratpro](https://github.com/somratpro) — all free, one
 If HuggingClaw saves you time, consider buying me a coffee to keep the projects alive!
 
 **USDT (TRC-20 / TRON network only)**
+
 ```
 TELx8TJz1W1h7n6SgpgGNNGZXpJCEUZrdB
 ```
+
 > [!WARNING]
 > Send **USDT on TRC-20 network only**. Sending other tokens or using a different network will result in permanent loss.
 
