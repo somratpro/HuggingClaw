@@ -360,11 +360,12 @@ if [ -n "${TRUSTED_PROXIES:-}" ]; then
   CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".gateway.trustedProxies += $PROXIES_JSON | .gateway.trustedProxies |= unique")
 fi
 
-# Allowed origins (optional — lock down Control UI to specific URLs)
-# Set ALLOWED_ORIGINS as comma-separated URLs, e.g. "https://your-space.hf.space"
+# Allowed origins (optional — add extra origins for external OpenClaw clients)
+# Set ALLOWED_ORIGINS as comma-separated URLs, e.g. "https://app.openclaw.ai"
+# These are MERGED with the Space host origin (which is always allowed).
 if [ -n "${ALLOWED_ORIGINS:-}" ]; then
   ORIGINS_JSON=$(echo "$ALLOWED_ORIGINS" | tr ',' '\n' | sed 's/^ *//;s/ *$//' | jq -R . | jq -s .)
-  CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".gateway.controlUi.allowedOrigins = $ORIGINS_JSON")
+  CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".gateway.controlUi.allowedOrigins += $ORIGINS_JSON | .gateway.controlUi.allowedOrigins |= unique")
 fi
 
 # Telegram (supports multiple user IDs, comma-separated)
