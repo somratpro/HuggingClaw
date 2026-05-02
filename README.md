@@ -16,6 +16,8 @@ secrets:
     description: "Strong token to secure your OpenClaw Control UI (generate: openssl rand -hex 32)."
   - name: CLOUDFLARE_WORKERS_TOKEN
     description: "Cloudflare API token — auto-creates a Worker proxy for Telegram, WhatsApp, and Google APIs."
+  - name: UPTIMEROBOT_API_KEY
+    description: UptimeRobot API key for automatic monitor setup.
 ---
 
 <!-- Badges -->
@@ -54,7 +56,7 @@ secrets:
 - 🐳 **Fast Builds:** Uses a pre-built OpenClaw Docker image to deploy in minutes.
 - 🌐 **Cloudflare Outbound Proxy:** HuggingClaw can automatically provision a Cloudflare Worker proxy for blocked outbound traffic such as Telegram API requests.
 - 💾 **Workspace Backup:** Chats, settings, and WhatsApp session state sync to a private HF Dataset via the `huggingface_hub`, preserving data automatically without storing your HF token in a git remote.
-- ⏰ **External Keep-Alive:** Set up a one-time UptimeRobot monitor from the dashboard to help keep free HF Spaces awake.
+- ⏰ **External Keep-Alive:** Add `UPTIMEROBOT_API_KEY` as a Space secret and the monitor is created automatically at boot — no manual setup.
 - 👥 **Multi-User Messaging:** Support for Telegram (multi-user) and WhatsApp (pairing).
 - 📊 **Visual Dashboard:** Beautiful Web UI to monitor uptime, sync status, and active models.
 - 🔔 **Webhooks:** Get notified on restarts or backup failures via standard webhooks.
@@ -166,14 +168,7 @@ HuggingClaw automatically syncs your workspace (chats, settings, sessions) to a 
 
 ## 💓 Staying Alive *(Recommended on Free HF Spaces)*
 
-To help keep your Space awake, set up an external [UptimeRobot](https://uptimerobot.com/) monitor directly from the dashboard UI.
-
-1. Open your Space's dashboard (`/`).
-2. Find the **Keep Space Awake** section.
-3. Paste your UptimeRobot **Main API key**.
-4. Click **Create Monitor**.
-
-HuggingClaw will automatically create a monitor for your Space's `/health` endpoint.
+Add your [UptimeRobot](https://uptimerobot.com/) **Main API key** as a Space secret named `UPTIMEROBOT_API_KEY`. HuggingClaw will automatically create a monitor for your Space's `/health` endpoint at boot. The dashboard shows the current status (configured, setting up, or failed).
 
 ## 🔔 Webhooks *(Optional)*
 
@@ -313,7 +308,7 @@ HuggingClaw uses a multi-layered approach to ensure stability and persistence on
 - **Missing secrets:** Ensure `LLM_API_KEY`, `LLM_MODEL`, and `GATEWAY_TOKEN` are set in your Space **Settings → Secrets**.
 - **Telegram bot issues:** Verify your `TELEGRAM_BOT_TOKEN`. Check Space logs for lines like `📱 Enabling Telegram`.
 - **Backup restore failing:** Make sure `HF_TOKEN` is valid and has write access to your HF account dataset. Set `HF_USERNAME` only if auto-detection is not available in your environment.
-- **Space keeps sleeping:** Open `/` and use `Keep Space Awake` to create the external monitor.
+- **Space keeps sleeping:** Add `UPTIMEROBOT_API_KEY` as a Space secret to enable automatic keep-awake monitoring.
 - **Auth errors / proxy:** If you see reverse-proxy auth errors, add the logged IPs under `TRUSTED_PROXIES` (from logs `remote=x.x.x.x`).
 - **Control UI says too many failed authentication attempts:** Wait for the retry window to expire, then open the Space in an incognito window or clear site storage for your Space before logging in again with `GATEWAY_TOKEN`.
 - **WhatsApp lost its session after restart:** Make sure `HF_TOKEN` is configured so the hidden session backup can be restored on boot.

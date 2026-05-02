@@ -23,11 +23,31 @@ if (
 
 const DEBUG = process.env.CLOUDFLARE_PROXY_DEBUG === "true";
 const PROXY_SHARED_SECRET = (process.env.CLOUDFLARE_PROXY_SECRET || "").trim();
-const PROXY_DOMAINS = process.env.CLOUDFLARE_PROXY_DOMAINS || "*";
-const BLOCKED_DOMAINS = PROXY_DOMAINS.split(",")
-  .map((domain) => domain.trim())
-  .filter(Boolean);
-const PROXY_ALL = PROXY_DOMAINS === "*";
+const DEFAULT_PROXY_DOMAINS = [
+  "api.telegram.org", "discord.com", "discordapp.com",
+  "gateway.discord.gg", "status.discord.com", "web.whatsapp.com",
+  "graph.facebook.com", "graph.instagram.com",
+  "api.twitter.com", "api.x.com", "upload.twitter.com",
+  "api.linkedin.com", "www.linkedin.com",
+  "open.tiktokapis.com", "oauth.reddit.com",
+  "youtube.com", "www.youtube.com",
+  "api.openai.com",
+  "api.resend.com", "api.sendgrid.com", "api.mailgun.net",
+  "googleapis.com", "google.com", "googleusercontent.com", "gstatic.com",
+];
+const PROXY_DOMAINS_RAW = (process.env.CLOUDFLARE_PROXY_DOMAINS || "").trim();
+const PROXY_ALL = PROXY_DOMAINS_RAW === "*";
+let BLOCKED_DOMAINS;
+if (PROXY_ALL) {
+  BLOCKED_DOMAINS = [];
+} else {
+  const extra = PROXY_DOMAINS_RAW.split(",").map((d) => d.trim()).filter(Boolean);
+  const seen = new Set(DEFAULT_PROXY_DOMAINS);
+  BLOCKED_DOMAINS = [...DEFAULT_PROXY_DOMAINS];
+  for (const d of extra) {
+    if (!seen.has(d)) { BLOCKED_DOMAINS.push(d); seen.add(d); }
+  }
+}
 
 if (PROXY_URL) {
   try {

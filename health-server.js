@@ -1,6 +1,5 @@
 // Single public entrypoint for HF Spaces: local dashboard + reverse proxy to OpenClaw.
 const http = require("http");
-const https = require("https");
 const fs = require("fs");
 const net = require("net");
 
@@ -17,19 +16,10 @@ const SYNC_INTERVAL = process.env.SYNC_INTERVAL || "180";
 const DASHBOARD_BASE = "/dashboard";
 const DASHBOARD_STATUS_PATH = `${DASHBOARD_BASE}/status`;
 const DASHBOARD_HEALTH_PATH = `${DASHBOARD_BASE}/health`;
-const DASHBOARD_UPTIMEROBOT_PATH = `${DASHBOARD_BASE}/uptimerobot/setup`;
 const DASHBOARD_APP_BASE = `${DASHBOARD_BASE}/app`;
 const APP_BASE = "/app";
-const UPTIMEROBOT_SETUP_ENABLED =
-  String(process.env.UPTIMEROBOT_SETUP_ENABLED || "true").toLowerCase() ===
-  "true";
-const UPTIMEROBOT_RATE_WINDOW_MS = 60 * 1000;
-const UPTIMEROBOT_RATE_MAX = Number(
-  process.env.UPTIMEROBOT_RATE_LIMIT_PER_MINUTE || 5,
-);
-const SPACE_VISIBILITY_TTL_MS = 10 * 60 * 1000;
-const spaceVisibilityCache = new Map();
-const uptimerobotRateMap = new Map();
+const UPTIMEROBOT_STATUS_FILE = "/tmp/huggingclaw-uptimerobot-status.json";
+const UPTIMEROBOT_API_KEY_SET = !!process.env.UPTIMEROBOT_API_KEY;
 
 function parseRequestUrl(url) {
   try {
@@ -62,10 +52,8 @@ function isLocalRoute(pathname) {
   return (
     pathname === "/health" ||
     pathname === "/status" ||
-    pathname === "/uptimerobot/setup" ||
     pathname === DASHBOARD_HEALTH_PATH ||
-    pathname === DASHBOARD_STATUS_PATH ||
-    pathname === DASHBOARD_UPTIMEROBOT_PATH
+    pathname === DASHBOARD_STATUS_PATH
   );
 }
 
@@ -125,38 +113,6 @@ function getRequesterIp(req) {
   );
 }
 
-function isRateLimited(req) {
-  const now = Date.now();
-  const ip = getRequesterIp(req);
-  const bucket = uptimerobotRateMap.get(ip) || [];
-  const recent = bucket.filter((ts) => now - ts < UPTIMEROBOT_RATE_WINDOW_MS);
-  recent.push(now);
-  uptimerobotRateMap.set(ip, recent);
-  return recent.length > UPTIMEROBOT_RATE_MAX;
-}
-
-// Prune stale rate-limit buckets every 5 minutes to prevent unbounded growth.
-setInterval(() => {
-  const cutoff = Date.now() - UPTIMEROBOT_RATE_WINDOW_MS;
-  for (const [ip, timestamps] of uptimerobotRateMap) {
-    if (timestamps.every((ts) => ts < cutoff)) uptimerobotRateMap.delete(ip);
-  }
-}, 5 * 60 * 1000).unref();
-
-function isAllowedUptimeSetupOrigin(req) {
-  const host = String(req.headers.host || "").toLowerCase();
-  const origin = String(req.headers.origin || "").toLowerCase();
-  const referer = String(req.headers.referer || "").toLowerCase();
-  if (!host) return false;
-  if (origin && !origin.includes(host)) return false;
-  if (referer && !referer.includes(host)) return false;
-  return true;
-}
-
-function isValidUptimeApiKey(key) {
-  return /^[A-Za-z0-9_-]{20,128}$/.test(String(key || ""));
-}
-
 function readSyncStatus() {
   try {
     if (fs.existsSync("/tmp/sync-status.json")) {
@@ -196,76 +152,13 @@ function readGuardianStatus() {
   return { configured: true, connected: false, pairing: false };
 }
 
-function decodeJwtPayload(token) {
+function getUptimeRobotStatus() {
   try {
-    const parts = String(token || "").split(".");
-    if (parts.length < 2) return null;
-    const normalized = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-    const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
-    return JSON.parse(Buffer.from(padded, "base64").toString("utf8"));
-  } catch {
-    return null;
-  }
-}
-
-function getSpaceRef(parsedUrl) {
-  const signedToken = parsedUrl.searchParams.get("__sign");
-  if (!signedToken) return null;
-
-  const payload = decodeJwtPayload(signedToken);
-  const subject = payload && payload.sub;
-  const match =
-    typeof subject === "string"
-      ? subject.match(/^\/spaces\/([^/]+)\/([^/]+)$/)
-      : null;
-
-  if (!match) return null;
-  return { owner: match[1], repo: match[2] };
-}
-
-function fetchStatusCode(url) {
-  return new Promise((resolve, reject) => {
-    const req = https.get(
-      url,
-      {
-        headers: {
-          "user-agent": "HuggingClaw/1.0",
-          accept: "application/json",
-        },
-      },
-      (res) => {
-        res.resume();
-        resolve(res.statusCode || 0);
-      },
-    );
-    req.on("error", reject);
-    req.setTimeout(5000, () => {
-      req.destroy(new Error("Request timed out"));
-    });
-  });
-}
-
-async function resolveSpaceIsPrivate(parsedUrl) {
-  const ref = getSpaceRef(parsedUrl);
-  if (!ref) return false;
-
-  const cacheKey = `${ref.owner}/${ref.repo}`;
-  const cached = spaceVisibilityCache.get(cacheKey);
-  if (cached && Date.now() - cached.timestamp < SPACE_VISIBILITY_TTL_MS) {
-    return cached.isPrivate;
-  }
-
-  try {
-    const statusCode = await fetchStatusCode(
-      `https://huggingface.co/api/spaces/${ref.owner}/${ref.repo}`,
-    );
-    const isPrivate = statusCode === 401 || statusCode === 403 || statusCode === 404;
-    spaceVisibilityCache.set(cacheKey, { isPrivate, timestamp: Date.now() });
-    return isPrivate;
-  } catch {
-    if (cached) return cached.isPrivate;
-    return false;
-  }
+    if (fs.existsSync(UPTIMEROBOT_STATUS_FILE)) {
+      return JSON.parse(fs.readFileSync(UPTIMEROBOT_STATUS_FILE, "utf8"));
+    }
+  } catch {}
+  return null;
 }
 
 function renderChannelBadge(channel, configuredLabel) {
@@ -295,48 +188,32 @@ function renderSyncBadge(syncData) {
 
 function renderDashboard(initialData) {
   const controlUiHref = `${APP_BASE}/`;
-  const keepAwakeHtml = !UPTIMEROBOT_SETUP_ENABLED
-    ? `
-            <div id="uptimerobot-private-note" class="helper-summary">
-                UptimeRobot setup is disabled for this Space.
-            </div>
-        `
-    : initialData.spacePrivate
-    ? `
-            <div id="uptimerobot-private-note" class="helper-summary">
-                <strong>This Space is private.</strong> External monitors cannot reliably access private HF health URLs, so keep-awake setup is only available on public Spaces.
-            </div>
-        `
-    : `
-            <div id="uptimerobot-public-flow">
-                <div id="uptimerobot-summary" class="helper-summary">
-                    One-time setup for public Spaces. Paste your UptimeRobot <strong>Main API key</strong> to create the monitor.
-                </div>
-                <button id="uptimerobot-toggle" class="helper-toggle" type="button">
-                    Set Up Monitor
-                </button>
-                <div id="uptimerobot-shell" class="helper-shell hidden">
-                    <div class="helper-copy">
-                        Do <strong>not</strong> use the Read-only API key or a Monitor-specific API key.
-                    </div>
-                    <div class="helper-row">
-                        <input
-                            id="uptimerobot-key"
-                            class="helper-input"
-                            type="password"
-                            placeholder="Paste your UptimeRobot Main API key"
-                            autocomplete="off"
-                        />
-                        <button id="uptimerobot-btn" class="helper-button" type="button">
-                            Create Monitor
-                        </button>
-                    </div>
-                    <div class="helper-note">
-                        One-time setup. Your key is only used to create the monitor for this Space.
-                    </div>
-                </div>
-            </div>
-        `;
+  const urStatus = initialData.uptimerobotStatus;
+  let keepAwakeHtml;
+  if (urStatus?.configured) {
+    keepAwakeHtml = `
+            <div class="helper-summary success">
+                <div class="status-badge status-online"><div class="pulse"></div>CONFIGURED</div>
+                <span>UptimeRobot monitor active for <code>${urStatus.url || "your /health endpoint"}</code>.</span>
+            </div>`;
+  } else if (urStatus?.configured === false) {
+    keepAwakeHtml = `
+            <div class="helper-summary" style="background:rgba(239,68,68,0.08);">
+                <div class="status-badge status-offline">FAILED</div>
+                <span>Monitor setup failed. Check Space logs for details.</span>
+            </div>`;
+  } else if (UPTIMEROBOT_API_KEY_SET) {
+    keepAwakeHtml = `
+            <div class="helper-summary">
+                <div class="status-badge status-syncing">SETTING UP&hellip;</div>
+                <span>UptimeRobot monitor is being configured.</span>
+            </div>`;
+  } else {
+    keepAwakeHtml = `
+            <div class="helper-summary">
+                <strong>Not configured.</strong> Add <code>UPTIMEROBOT_API_KEY</code> to Space secrets to enable keep-awake monitoring.
+            </div>`;
+  }
   return `
 <!DOCTYPE html>
 <html lang="en">
@@ -627,30 +504,21 @@ function renderDashboard(initialData) {
             color: var(--text-dim);
             font-size: 0.9rem;
             line-height: 1.5;
-        }
-
-        .helper-summary strong {
-            color: var(--text);
-        }
-
-        .helper-summary.success {
-            background: rgba(16, 185, 129, 0.08);
-        }
-
-        .helper-toggle {
-            margin-top: 14px;
-            display: inline-flex;
+            display: flex;
             align-items: center;
-            justify-content: center;
-            background: rgba(255, 255, 255, 0.04);
-            color: var(--text);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 12px;
-            padding: 12px 16px;
-            font: inherit;
-            font-weight: 600;
-            cursor: pointer;
+            gap: 10px;
+            flex-wrap: wrap;
         }
+
+        .helper-summary strong { color: var(--text); }
+        .helper-summary code {
+            background: rgba(255,255,255,0.06);
+            padding: 2px 6px;
+            border-radius: 6px;
+            font-size: 0.82rem;
+            color: var(--text);
+        }
+        .helper-summary.success { background: rgba(16, 185, 129, 0.08); }
 
         @media (max-width: 700px) {
             body {
@@ -744,7 +612,6 @@ function renderDashboard(initialData) {
         <div class="stat-card helper-card">
             <span class="stat-label">Keep Space Awake</span>
             ${keepAwakeHtml}
-            <div id="uptimerobot-result" class="helper-result"></div>
         </div>
 
         <div class="footer">
@@ -807,210 +674,15 @@ function renderDashboard(initialData) {
             }
         }
 
-        const monitorStateKey = 'huggingclaw_uptimerobot_setup_v1';
-        const KEEP_AWAKE_PRIVATE = ${initialData.spacePrivate ? "true" : "false"};
-        const KEEP_AWAKE_SETUP_ENABLED = ${UPTIMEROBOT_SETUP_ENABLED ? "true" : "false"};
-
-        function setMonitorUiState(isConfigured) {
-            const summary = document.getElementById('uptimerobot-summary');
-            const shell = document.getElementById('uptimerobot-shell');
-            const toggle = document.getElementById('uptimerobot-toggle');
-
-            if (!summary || !shell || !toggle) {
-                return;
-            }
-
-            if (isConfigured) {
-                summary.classList.add('success');
-                summary.innerHTML = '<strong>Already set up.</strong> Your UptimeRobot monitor should keep this public Space awake.';
-                shell.classList.add('hidden');
-                toggle.textContent = 'Set Up Again';
-            } else {
-                summary.classList.remove('success');
-                summary.innerHTML = 'One-time setup for public Spaces. Paste your UptimeRobot <strong>Main API key</strong> to create the monitor.';
-                toggle.textContent = 'Set Up Monitor';
-            }
-        }
-
-        function restoreMonitorUiState() {
-            try {
-                const value = window.localStorage.getItem(monitorStateKey);
-                setMonitorUiState(value === 'done');
-            } catch {
-                setMonitorUiState(false);
-            }
-        }
-
-        function toggleMonitorSetup() {
-            const shell = document.getElementById('uptimerobot-shell');
-            shell.classList.toggle('hidden');
-        }
-
-        async function setupUptimeRobot() {
-            const input = document.getElementById('uptimerobot-key');
-            const button = document.getElementById('uptimerobot-btn');
-            const result = document.getElementById('uptimerobot-result');
-            const apiKey = input.value.trim();
-
-            if (!apiKey) {
-                result.className = 'helper-result error';
-                result.textContent = 'Paste your UptimeRobot Main API key first.';
-                return;
-            }
-
-            button.disabled = true;
-            button.textContent = 'Creating...';
-            result.className = 'helper-result';
-            result.textContent = '';
-
-            try {
-                const res = await fetch(getDashboardBase() + '/uptimerobot/setup' + getCurrentSearch(), {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ apiKey })
-                });
-                const data = await res.json();
-
-                if (!res.ok) {
-                    throw new Error(data.message || 'Failed to create monitor.');
-                }
-
-                result.className = 'helper-result ok';
-                result.textContent = data.message || 'UptimeRobot monitor is ready.';
-                input.value = '';
-                try {
-                    window.localStorage.setItem(monitorStateKey, 'done');
-                } catch {}
-                setMonitorUiState(true);
-                document.getElementById('uptimerobot-shell').classList.add('hidden');
-            } catch (error) {
-                result.className = 'helper-result error';
-                result.textContent = error.message || 'Failed to create monitor.';
-            } finally {
-                button.disabled = false;
-                button.textContent = 'Create Monitor';
-            }
-        }
-
         updateStats();
         setInterval(updateStats, 10000);
         document.getElementById('control-ui-link').setAttribute('href', getDashboardBase() + '/app/' + getCurrentSearch());
-        if (KEEP_AWAKE_SETUP_ENABLED && !KEEP_AWAKE_PRIVATE) {
-            restoreMonitorUiState();
-            document.getElementById('uptimerobot-btn').addEventListener('click', setupUptimeRobot);
-            document.getElementById('uptimerobot-toggle').addEventListener('click', toggleMonitorSetup);
-        }
     </script>
 </body>
 </html>
   `;
 }
 
-function readRequestBody(req) {
-  return new Promise((resolve, reject) => {
-    let body = "";
-
-    req.on("data", (chunk) => {
-      body += chunk;
-      if (body.length > 1024 * 64) {
-        reject(new Error("Request too large"));
-        req.destroy();
-      }
-    });
-
-    req.on("end", () => resolve(body));
-    req.on("error", reject);
-  });
-}
-
-function postUptimeRobot(path, form) {
-  const body = new URLSearchParams(form).toString();
-
-  return new Promise((resolve, reject) => {
-    const request = https.request(
-      {
-        hostname: "api.uptimerobot.com",
-        port: 443,
-        method: "POST",
-        path,
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          "Content-Length": Buffer.byteLength(body),
-        },
-      },
-      (response) => {
-        let raw = "";
-        response.setEncoding("utf8");
-        response.on("data", (chunk) => {
-          raw += chunk;
-        });
-        response.on("end", () => {
-          try {
-            resolve(JSON.parse(raw));
-          } catch {
-            reject(new Error("Unexpected response from UptimeRobot"));
-          }
-        });
-      },
-    );
-
-    request.on("error", reject);
-    request.write(body);
-    request.end();
-  });
-}
-
-async function createUptimeRobotMonitor(apiKey, host) {
-  const cleanHost = String(host || "")
-    .replace(/^https?:\/\//, "")
-    .replace(/\/.*$/, "");
-
-  if (!cleanHost) {
-    throw new Error("Missing Space host.");
-  }
-
-  const monitorUrl = `https://${cleanHost}/health`;
-  const existing = await postUptimeRobot("/v2/getMonitors", {
-    api_key: apiKey,
-    format: "json",
-    logs: "0",
-    response_times: "0",
-    response_times_limit: "1",
-  });
-
-  const existingMonitor = Array.isArray(existing.monitors)
-    ? existing.monitors.find((monitor) => monitor.url === monitorUrl)
-    : null;
-
-  if (existingMonitor) {
-    return {
-      created: false,
-      message: `Monitor already exists for ${monitorUrl}`,
-    };
-  }
-
-  const created = await postUptimeRobot("/v2/newMonitor", {
-    api_key: apiKey,
-    format: "json",
-    type: "1",
-    friendly_name: `HuggingClaw ${cleanHost}`,
-    url: monitorUrl,
-    interval: "300",
-  });
-
-  if (created.stat !== "ok") {
-    const message =
-      created?.error?.message ||
-      created?.message ||
-      "Failed to create UptimeRobot monitor.";
-    throw new Error(message);
-  }
-
-  return {
-    created: true,
-    message: `Monitor created for ${monitorUrl}`,
-  };
-}
 
 function proxyHttp(req, res, proxyPath = req.url, proxyPort = GATEWAY_PORT) {
   const clientIp = getForwardedClientIp(req);
@@ -1168,86 +840,22 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  if (
-    pathname === "/uptimerobot/setup" ||
-    pathname === DASHBOARD_UPTIMEROBOT_PATH
-  ) {
-    if (req.method !== "POST") {
-      res.writeHead(405, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ message: "Method not allowed" }));
-      return;
-    }
-
-    void (async () => {
-      try {
-        if (!UPTIMEROBOT_SETUP_ENABLED) {
-          res.writeHead(403, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ message: "Uptime setup is disabled." }));
-          return;
-        }
-
-        if (isRateLimited(req)) {
-          res.writeHead(429, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ message: "Too many requests." }));
-          return;
-        }
-
-        if (!isAllowedUptimeSetupOrigin(req)) {
-          res.writeHead(403, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ message: "Invalid request origin." }));
-          return;
-        }
-
-        const body = await readRequestBody(req);
-        const parsed = JSON.parse(body || "{}");
-        const apiKey = String(parsed.apiKey || "").trim();
-
-        if (!isValidUptimeApiKey(apiKey)) {
-          res.writeHead(400, { "Content-Type": "application/json" });
-          res.end(
-            JSON.stringify({
-              message: "A valid API key is required.",
-            }),
-          );
-          return;
-        }
-
-        const result = await createUptimeRobotMonitor(apiKey, req.headers.host);
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify(result));
-      } catch (error) {
-        res.writeHead(400, { "Content-Type": "application/json" });
-        res.end(
-          JSON.stringify({
-            message:
-              error && error.message
-                ? error.message
-                : "Failed to create UptimeRobot monitor.",
-          }),
-        );
-      }
-    })();
-    return;
-  }
-
   if (isDashboardRoute(pathname)) {
-    void (async () => {
-      const guardianStatus = readGuardianStatus();
-      const initialData = {
-        model: LLM_MODEL,
-        whatsapp: {
-          configured: guardianStatus.configured,
-          connected: guardianStatus.connected,
-          pairing: guardianStatus.pairing,
-        },
-        telegram: normalizeChannelStatus(null, TELEGRAM_ENABLED),
-        sync: readSyncStatus(),
-        uptime: uptimeHuman,
-        spacePrivate: await resolveSpaceIsPrivate(parsedUrl),
-      };
-      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-      res.end(renderDashboard(initialData));
-    })();
+    const guardianStatus = readGuardianStatus();
+    const initialData = {
+      model: LLM_MODEL,
+      whatsapp: {
+        configured: guardianStatus.configured,
+        connected: guardianStatus.connected,
+        pairing: guardianStatus.pairing,
+      },
+      telegram: normalizeChannelStatus(null, TELEGRAM_ENABLED),
+      sync: readSyncStatus(),
+      uptime: uptimeHuman,
+      uptimerobotStatus: getUptimeRobotStatus(),
+    };
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+    res.end(renderDashboard(initialData));
     return;
   }
 

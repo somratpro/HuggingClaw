@@ -145,7 +145,6 @@ CLOUDFLARE_WORKERS_TOKEN="${CLOUDFLARE_WORKERS_TOKEN:-${CLOUDFLARE_API_TOKEN:-}}
 export CLOUDFLARE_WORKERS_TOKEN
 CF_PROXY_ENV_FILE="/tmp/huggingclaw-cloudflare-proxy.env"
 if [ -n "${CLOUDFLARE_WORKERS_TOKEN:-}" ] || [ -n "${CLOUDFLARE_PROXY_URL:-}" ]; then
-  export CLOUDFLARE_PROXY_DOMAINS="${CLOUDFLARE_PROXY_DOMAINS:-api.telegram.org,web.whatsapp.com,googleapis.com}"
   # Default debug off for production. Set CLOUDFLARE_PROXY_DEBUG=true in HF
   # Space secrets to surface per-request "Redirecting" + error-cause logs.
   export CLOUDFLARE_PROXY_DEBUG="${CLOUDFLARE_PROXY_DEBUG:-false}"
@@ -497,6 +496,11 @@ export LLM_MODEL="$LLM_MODEL"
 # 10. Start Health Server & Dashboard
 node /home/node/app/health-server.js &
 HEALTH_PID=$!
+
+if [ -n "${UPTIMEROBOT_API_KEY:-}" ] && [ -n "${SPACE_HOST:-}" ]; then
+  echo "Setting up UptimeRobot monitor..."
+  bash /home/node/app/setup-uptimerobot.sh "${SPACE_HOST}" || true
+fi
 
 # ── Launch gateway ──
 echo "Launching OpenClaw gateway on port 7860..."

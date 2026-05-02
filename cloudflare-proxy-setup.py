@@ -12,13 +12,33 @@ from pathlib import Path
 API_BASE = "https://api.cloudflare.com/client/v4"
 ENV_FILE = Path("/tmp/huggingclaw-cloudflare-proxy.env")
 DEFAULT_ALLOWED = [
+    # Messaging
     "api.telegram.org",
     "discord.com",
     "discordapp.com",
     "gateway.discord.gg",
     "status.discord.com",
     "web.whatsapp.com",
+    # Social — confirmed/likely blocked by HF firewall
     "graph.facebook.com",
+    "graph.instagram.com",
+    "api.twitter.com",
+    "api.x.com",
+    "upload.twitter.com",
+    "api.linkedin.com",
+    "www.linkedin.com",
+    "open.tiktokapis.com",
+    "oauth.reddit.com",
+    # Video
+    "youtube.com",
+    "www.youtube.com",
+    # AI APIs
+    "api.openai.com",
+    # Email HTTP APIs (SMTP ports are blocked; use these instead)
+    "api.resend.com",
+    "api.sendgrid.com",
+    "api.mailgun.net",
+    # Google
     "googleapis.com",
     "google.com",
     "googleusercontent.com",
@@ -207,10 +227,17 @@ def main() -> int:
 
         worker_name = derive_worker_name()
         allowed_raw = os.environ.get("CLOUDFLARE_PROXY_DOMAINS", "").strip()
-        allow_proxy_all = not allowed_raw or allowed_raw == "*"
-        allowed_targets = DEFAULT_ALLOWED if not allowed_raw or allow_proxy_all else [
-            value.strip() for value in allowed_raw.split(",") if value.strip()
-        ]
+        allow_proxy_all = allowed_raw == "*"
+        if allow_proxy_all:
+            allowed_targets = DEFAULT_ALLOWED
+        else:
+            extra = [v.strip() for v in allowed_raw.split(",") if v.strip()]
+            seen = set(DEFAULT_ALLOWED)
+            allowed_targets = list(DEFAULT_ALLOWED)
+            for domain in extra:
+                if domain not in seen:
+                    allowed_targets.append(domain)
+                    seen.add(domain)
         proxy_secret = existing_secret or secrets.token_urlsafe(24)
         worker_source = render_worker(proxy_secret, allowed_targets, allow_proxy_all)
 
