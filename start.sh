@@ -136,7 +136,7 @@ chmod 700 /home/node/.openclaw/credentials
 BACKUP_DATASET="${BACKUP_DATASET_NAME:-huggingclaw-backup}"
 if [ -n "${HF_TOKEN:-}" ]; then
   echo "Restoring workspace from HF Dataset..."
-  python3 /home/node/app/workspace-sync.py restore || true
+  python3 /home/node/app/openclaw-sync.py restore || true
 else
   echo "HF_TOKEN not set — running without dataset persistence."
 fi
@@ -467,9 +467,9 @@ fi
 # ── Trap SIGTERM for graceful shutdown ──
 graceful_shutdown() {
   echo "Shutting down..."
-  if [ -f "/home/node/app/workspace-sync.py" ]; then
+  if [ -f "/home/node/app/openclaw-sync.py" ]; then
     echo "Saving state before exit..."
-    python3 /home/node/app/workspace-sync.py sync-once || \
+    python3 /home/node/app/openclaw-sync.py sync-once || \
       echo "Warning: could not complete shutdown sync"
   fi
   kill $(jobs -p) 2>/dev/null
@@ -560,7 +560,7 @@ warmup_browser
 
 # 12. Start Workspace Sync after startup settles
 if [ -n "${HF_TOKEN:-}" ]; then
-  python3 -u /home/node/app/workspace-sync.py loop &
+  python3 -u /home/node/app/openclaw-sync.py loop &
 fi
 
 # Wait for gateway (allows trap to fire)

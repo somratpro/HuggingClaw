@@ -137,14 +137,6 @@ This is the easiest way. HuggingClaw will handle the deployment for you.
 - It generates a secure, private `CLOUDFLARE_PROXY_SECRET`.
 - All restricted outbound traffic is automatically routed through this Worker.
 
-### 🛠️ Manual Setup
-
-If you prefer to manage the Worker yourself:
-
-1. Create a new Cloudflare Worker.
-2. Paste the code from [cloudflare-worker.js](./cloudflare-worker.js) and deploy.
-3. Add the Worker URL to your Space as `CLOUDFLARE_PROXY_URL`.
-4. (Optional) Set a `CLOUDFLARE_PROXY_SECRET` in both the Worker (as a variable) and the Space (as a secret).
 
 ## 💬 WhatsApp Setup *(Optional)*
 

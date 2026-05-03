@@ -13,7 +13,7 @@ All notable changes to this project will be documented in this file.
 
 - **HF backup flow simplified** — HuggingClaw now uses `huggingface_hub` directly for restore and sync, matching the safer dataset-based pattern used in Hugging8n
 - **HF username no longer required in most cases** — backup namespace resolution now works from `HF_USERNAME`, `SPACE_AUTHOR_NAME`, or the authenticated HF token, so `HF_TOKEN` is usually enough on its own
-- **Startup restore path modernized** — startup now restores workspace and hidden state through `workspace-sync.py restore` instead of configuring a token-bearing git remote
+- **Startup restore path modernized** — startup now restores workspace and hidden state through `openclaw-sync.py restore` instead of configuring a token-bearing git remote
 - **README refreshed for the new backup model** — documentation now describes token-only backup setup, the removed git sync assumptions, and the hardened dashboard helper behavior
 - **Telegram networking simplified** — removed the channel-specific Telegram transport tweaks in favor of the generic Cloudflare outbound proxy path
 - **DNS monkey-patch removed** — HuggingClaw now relies on the Cloudflare outbound proxy path instead of the old `dns-fix.js` preload
@@ -63,7 +63,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - **Pre-built Docker image** — uses `ghcr.io/openclaw/openclaw:latest` multi-stage build for much faster builds (minutes instead of 30+)
-- **Python huggingface_hub sync** — `workspace-sync.py` uses the `huggingface_hub` library for more reliable HF Dataset sync (handles auth, LFS, retries). Falls back to git-based sync automatically
+- **Python huggingface_hub sync** — `openclaw-sync.py` uses the `huggingface_hub` library for more reliable HF Dataset sync (handles auth, LFS, retries). Falls back to git-based sync automatically
 - **Password auth** — `OPENCLAW_PASSWORD` for simpler login (optional alternative to token)
 - **Trusted proxies** — `TRUSTED_PROXIES` env var fixes "Proxy headers detected from untrusted address" errors on HF Spaces
 - **Allowed origins** — `ALLOWED_ORIGINS` env var to lock down Control UI access
