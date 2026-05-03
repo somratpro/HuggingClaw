@@ -15,9 +15,7 @@ secrets:
   - name: GATEWAY_TOKEN
     description: "Strong token to secure your OpenClaw Control UI (generate: openssl rand -hex 32)."
   - name: CLOUDFLARE_WORKERS_TOKEN
-    description: "Cloudflare API token — auto-creates a Worker proxy for Telegram, WhatsApp, and Google APIs."
-  - name: UPTIMEROBOT_API_KEY
-    description: UptimeRobot API key for automatic monitor setup.
+    description: "Cloudflare API token — auto-creates a Worker proxy and KeepAlive monitor."
 ---
 
 <!-- Badges -->
@@ -56,7 +54,7 @@ secrets:
 - 🐳 **Fast Builds:** Uses a pre-built OpenClaw Docker image to deploy in minutes.
 - 🌐 **Cloudflare Outbound Proxy:** HuggingClaw can automatically provision a Cloudflare Worker proxy for blocked outbound traffic such as Telegram API requests.
 - 💾 **Workspace Backup:** Chats, settings, and WhatsApp session state sync to a private HF Dataset via the `huggingface_hub`, preserving data automatically without storing your HF token in a git remote.
-- ⏰ **External Keep-Alive:** Add `UPTIMEROBOT_API_KEY` as a Space secret and the monitor is created automatically at boot — no manual setup.
+- ⏰ **Easy Keep-Alive:** Uses `CLOUDFLARE_WORKERS_TOKEN` to automatically set up a cron-triggered keep-awake worker at boot.
 - 👥 **Multi-User Messaging:** Support for Telegram (multi-user) and WhatsApp (pairing).
 - 📊 **Visual Dashboard:** Beautiful Web UI to monitor uptime, sync status, and active models.
 - 🔔 **Webhooks:** Get notified on restarts or backup failures via standard webhooks.
@@ -168,7 +166,7 @@ HuggingClaw automatically syncs your workspace (chats, settings, sessions) to a 
 
 ## 💓 Staying Alive *(Recommended on Free HF Spaces)*
 
-Add your [UptimeRobot](https://uptimerobot.com/) **Main API key** as a Space secret named `UPTIMEROBOT_API_KEY`. HuggingClaw will automatically create a monitor for your Space's `/health` endpoint at boot. The dashboard shows the current status (configured, setting up, or failed).
+Your Space will automatically be kept awake by a background Cloudflare Worker when you configure the `CLOUDFLARE_WORKERS_TOKEN` secret. The worker uses a cron trigger to regularly ping your Space's `/health` endpoint. The dashboard displays the current keep-alive worker status.
 
 ## 🔔 Webhooks *(Optional)*
 
@@ -187,7 +185,7 @@ Configure password access and network restrictions:
 | `OPENCLAW_PASSWORD` | — | Enable simple password auth instead of token |
 | `TRUSTED_PROXIES` | — | Comma-separated IPs of HF proxies |
 | `ALLOWED_ORIGINS` | — | Comma-separated allowed origins for Control UI |
-| `OPENCLAW_VERSION` | `latest` | Build-time pin for the OpenClaw image tag |
+| `CLOUDFLARE_KEEPALIVE_ENABLED` | `true` | Set to `false` to disable the automatic Cloudflare KeepAlive worker |
 
 ## 🤖 LLM Providers
 
@@ -308,7 +306,7 @@ HuggingClaw uses a multi-layered approach to ensure stability and persistence on
 - **Missing secrets:** Ensure `LLM_API_KEY`, `LLM_MODEL`, and `GATEWAY_TOKEN` are set in your Space **Settings → Secrets**.
 - **Telegram bot issues:** Verify your `TELEGRAM_BOT_TOKEN`. Check Space logs for lines like `📱 Enabling Telegram`.
 - **Backup restore failing:** Make sure `HF_TOKEN` is valid and has write access to your HF account dataset. Set `HF_USERNAME` only if auto-detection is not available in your environment.
-- **Space keeps sleeping:** Add `UPTIMEROBOT_API_KEY` as a Space secret to enable automatic keep-awake monitoring.
+- **Space keeps sleeping:** Add `CLOUDFLARE_WORKERS_TOKEN` as a Space secret to enable automatic keep-awake monitoring via Cloudflare Workers.
 - **Auth errors / proxy:** If you see reverse-proxy auth errors, add the logged IPs under `TRUSTED_PROXIES` (from logs `remote=x.x.x.x`).
 - **Control UI says too many failed authentication attempts:** Wait for the retry window to expire, then open the Space in an incognito window or clear site storage for your Space before logging in again with `GATEWAY_TOKEN`.
 - **WhatsApp lost its session after restart:** Make sure `HF_TOKEN` is configured so the hidden session backup can be restored on boot.
@@ -321,8 +319,9 @@ Similar projects by [@somratpro](https://github.com/somratpro) — all free, one
 
 | Project | What it runs | HF Space | GitHub |
 | :--- | :--- | :--- | :--- |
-| **HuggingClip** | Paperclip — AI agent orchestration platform | [Space](https://huggingface.co/spaces/somratpro/HuggingClip) | [Repo](https://github.com/somratpro/huggingclip) |
+| **HuggingMess** | Hermes — Self-hosted agent gateway | [Space](https://huggingface.co/spaces/somratpro/HuggingMess) | [Repo](https://github.com/somratpro/huggingmess) |
 | **Hugging8n** | n8n — workflow & automation platform | [Space](https://huggingface.co/spaces/somratpro/Hugging8n) | [Repo](https://github.com/somratpro/hugging8n) |
+| **HuggingClip** | Paperclip — AI agent orchestration platform | [Space](https://huggingface.co/spaces/somratpro/HuggingClip) | [Repo](https://github.com/somratpro/huggingclip) |
 
 ## 📚 Links
 
