@@ -18,7 +18,7 @@ When deploying HuggingClaw:
 - **Use a strong `GATEWAY_TOKEN`** — generate with `openssl rand -hex 32`
 - **Keep your HF token scoped** — use fine-grained tokens with minimum permissions
 - **Don't commit `.env` files** — the `.gitignore` already excludes them
-- **Use `TELEGRAM_USER_ID`** — restricts bot access to your account only
+- **Use `TELEGRAM_ALLOWED_USERS`** — restricts bot access to your account only
 - **Review logs regularly** — check for unauthorized access attempts
 
 ## Supported Versions

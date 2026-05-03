@@ -16,6 +16,10 @@ secrets:
     description: "Strong token to secure your OpenClaw Control UI (generate: openssl rand -hex 32)."
   - name: CLOUDFLARE_WORKERS_TOKEN
     description: "Cloudflare API token — auto-creates a Worker proxy and KeepAlive monitor."
+  - name: TELEGRAM_ALLOWED_USERS
+    description: "Comma-separated Telegram user IDs for access"
+  - name: TELEGRAM_BOT_TOKEN
+    description: "Telegram bot token from BotFather"
 ---
 
 <!-- Badges -->
@@ -111,8 +115,7 @@ To chat via Telegram:
 | Variable | Default | Description |
 | :--- | :--- | :--- |
 | `TELEGRAM_BOT_TOKEN` | — | Telegram bot token from BotFather |
-| `TELEGRAM_USER_ID` | — | Single Telegram user ID allowlist |
-| `TELEGRAM_USER_IDS` | — | Comma-separated Telegram user IDs for team access |
+| `TELEGRAM_ALLOWED_USERS` | — | Comma-separated Telegram user IDs for access |
 
 ## 🌐 Cloudflare Proxy Setup
 

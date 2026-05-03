@@ -393,7 +393,13 @@ if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
       }
   ')
   
-  if [ -n "${TELEGRAM_USER_IDS:-}" ]; then
+  if [ -n "${TELEGRAM_ALLOWED_USERS:-}" ]; then
+    # Convert comma-separated IDs to JSON array (already safe — jq -R parses).
+    IDS_JSON=$(echo "$TELEGRAM_ALLOWED_USERS" | tr ',' '\n' | sed 's/^ *//;s/ *$//' | jq -R . | jq -s .)
+    CONFIG_JSON=$(jq \
+      --argjson ids "$IDS_JSON" \
+      '.channels.telegram += {"dmPolicy": "allowlist", "allowFrom": $ids}' <<<"$CONFIG_JSON")
+  elif [ -n "${TELEGRAM_USER_IDS:-}" ]; then
     # Convert comma-separated IDs to JSON array (already safe — jq -R parses).
     IDS_JSON=$(echo "$TELEGRAM_USER_IDS" | tr ',' '\n' | sed 's/^ *//;s/ *$//' | jq -R . | jq -s .)
     CONFIG_JSON=$(jq \
