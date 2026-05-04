@@ -9,6 +9,7 @@ import re
 import sys
 import time
 import urllib.request
+import urllib.error
 from pathlib import Path
 
 API_BASE = "https://api.cloudflare.com/client/v4"
@@ -22,8 +23,17 @@ def cf_request(method: str, path: str, token: str, body: bytes | None = None, co
         method=method,
         headers={"Authorization": f"Bearer {token}", "Content-Type": content_type},
     )
-    with urllib.request.urlopen(req, timeout=30) as response:
-        payload = json.loads(response.read().decode("utf-8"))
+    try:
+        with urllib.request.urlopen(req, timeout=30) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        try:
+            error_body = json.loads(e.read().decode("utf-8"))
+            errors = error_body.get("errors") or [{"message": "Unknown error"}]
+            error_msg = errors[0].get("message", "Unknown error") if errors else "Unknown error"
+        except:
+            error_msg = f"HTTP {e.code}: {e.reason}"
+        raise RuntimeError(f"Cloudflare API {e.code}: {error_msg}")
     if not payload.get("success"):
         errors = payload.get("errors") or [{"message": "Unknown Cloudflare API error"}]
         raise RuntimeError(errors[0].get("message", "Unknown Cloudflare API error"))
