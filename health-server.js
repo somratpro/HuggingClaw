@@ -15,7 +15,8 @@ const HF_BACKUP_ENABLED = !!process.env.HF_TOKEN;
 const SYNC_INTERVAL = process.env.SYNC_INTERVAL || "180";
 const APP_BASE = "/app";
 const SYNC_STATUS_FILE = "/tmp/sync-status.json";
-const CLOUDFLARE_KEEPALIVE_STATUS_FILE = "/tmp/huggingclaw-cloudflare-keepalive-status.json";
+const CLOUDFLARE_KEEPALIVE_STATUS_FILE =
+  "/tmp/huggingclaw-cloudflare-keepalive-status.json";
 
 function parseRequestUrl(url) {
   try {
@@ -60,7 +61,9 @@ function readGuardianStatus() {
 function getKeepaliveStatus() {
   try {
     if (fs.existsSync(CLOUDFLARE_KEEPALIVE_STATUS_FILE)) {
-      return JSON.parse(fs.readFileSync(CLOUDFLARE_KEEPALIVE_STATUS_FILE, "utf8"));
+      return JSON.parse(
+        fs.readFileSync(CLOUDFLARE_KEEPALIVE_STATUS_FILE, "utf8"),
+      );
     }
   } catch {}
   return null;
@@ -110,7 +113,13 @@ function toneBadge(label, tone = "neutral") {
   return `<span class="badge ${tone}">${escapeHtml(label)}</span>`;
 }
 
-function renderTile({ title, value, detail = "", tone = "neutral", meta = "" }) {
+function renderTile({
+  title,
+  value,
+  detail = "",
+  tone = "neutral",
+  meta = "",
+}) {
   return `<article class="tile ${tone}">
     <div class="tile-head">
       <span class="tile-title">${escapeHtml(title)}</span>
@@ -124,12 +133,16 @@ function renderTile({ title, value, detail = "", tone = "neutral", meta = "" }) 
 
 function renderDashboard(data) {
   const syncStatus = String(data.sync?.status || "unknown");
-  const syncTone = ["success", "restored", "synced", "configured"].includes(syncStatus)
+  const syncTone = ["success", "restored", "synced", "configured"].includes(
+    syncStatus,
+  )
     ? "ok"
     : syncStatus === "disabled"
       ? "warn"
       : "neutral";
-  const backupDetail = data.sync?.message ? escapeHtml(data.sync.message) : "No status yet";
+  const backupDetail = data.sync?.message
+    ? escapeHtml(data.sync.message)
+    : "No status yet";
 
   const keepaliveConfigured = data.keepalive?.configured === true;
   const keepaliveStatus = String(
@@ -150,7 +163,10 @@ function renderDashboard(data) {
   const tiles = [
     renderTile({
       title: "Gateway",
-      value: toneBadge(data.gatewayReady ? "Online" : "Offline", data.gatewayReady ? "ok" : "off"),
+      value: toneBadge(
+        data.gatewayReady ? "Online" : "Offline",
+        data.gatewayReady ? "ok" : "off",
+      ),
       detail: `Internal Port ${GATEWAY_PORT}`,
       tone: data.gatewayReady ? "ok" : "off",
     }),
@@ -167,14 +183,11 @@ function renderDashboard(data) {
       tone: "neutral",
     }),
     renderTile({
-      title: "WhatsApp",
-      value: toneBadge(data.whatsapp.connected ? "Connected" : (data.whatsapp.configured ? "Ready" : "Disabled"), data.whatsapp.connected ? "ok" : (data.whatsapp.configured ? "warn" : "neutral")),
-      detail: data.whatsapp.connected ? "Active Session" : (data.whatsapp.pairing ? "Pairing Requested" : "Channel configured"),
-      tone: data.whatsapp.connected ? "ok" : (data.whatsapp.configured ? "warn" : "neutral"),
-    }),
-    renderTile({
       title: "Telegram",
-      value: toneBadge(TELEGRAM_ENABLED ? "Enabled" : "Disabled", TELEGRAM_ENABLED ? "ok" : "neutral"),
+      value: toneBadge(
+        TELEGRAM_ENABLED ? "Enabled" : "Disabled",
+        TELEGRAM_ENABLED ? "ok" : "neutral",
+      ),
       detail: TELEGRAM_ENABLED ? "Bot Channel active" : "Not configured",
       tone: TELEGRAM_ENABLED ? "ok" : "neutral",
     }),
@@ -186,7 +199,10 @@ function renderDashboard(data) {
     }),
     renderTile({
       title: "Keep Awake",
-      value: toneBadge(keepaliveConfigured ? "CF Cron" : keepaliveStatus.toUpperCase(), keepAliveTone),
+      value: toneBadge(
+        keepaliveConfigured ? "CF Cron" : keepaliveStatus.toUpperCase(),
+        keepAliveTone,
+      ),
       detail: keepAliveDetail,
       tone: keepAliveTone,
     }),
@@ -199,14 +215,14 @@ function renderDashboard(data) {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>HuggingClaw</title>
   <style>
-    :root { color-scheme: dark; --bg:#08080f; --panel:#12111b; --panel2:#151421; --line:#26243a; --text:#f6f4ff; --muted:#7f7a9e; --soft:#b8b3d7; --good:#22c55e; --warn:#f5c542; --bad:#fb7185; --accent:#3b82f6; --accent2:#8b5cf6; }
+    :root { color-scheme: dark; --bg:#08080f; --panel:#12111b; --line:#26243a; --text:#f6f4ff; --muted:#7f7a9e; --soft:#b8b3d7; --good:#22c55e; --warn:#f5c542; --bad:#fb7185;  }
     * { box-sizing:border-box; }
     body { margin:0; min-height:100vh; font-family:Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background:var(--bg); color:var(--text); font-size:13px; }
     main { width:min(720px, calc(100% - 32px)); margin:0 auto; padding:36px 0 44px; }
     header { text-align:center; margin-bottom:22px; }
     h1 { margin:0; font-size:1.65rem; line-height:1; letter-spacing:0; }
     .subtitle { margin-top:12px; color:var(--muted); font-size:.72rem; text-transform:uppercase; letter-spacing:.14em; font-weight:800; }
-    .hero-action { display:flex; width:100%; min-height:46px; align-items:center; justify-content:center; border-radius:8px; background:linear-gradient(135deg, var(--accent), var(--accent2)); color:#ffffff; text-decoration:none; font-weight:850; font-size:.98rem; margin:24px 0 20px; transition: opacity 0.15s ease; }
+    .hero-action { display:flex; width:100%; min-height:46px; align-items:center; justify-content:center; border-radius:8px; background:#fff; color:#000; text-decoration:none; font-weight:850; font-size:.98rem; margin:24px 0 20px; transition: opacity 0.15s ease; }
     .hero-action:hover { opacity: 0.9; }
     .overview { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px; margin-bottom:10px; }
     .tile { border:1px solid var(--line); background:var(--panel); border-radius:11px; padding:18px; min-height:124px; display:flex; flex-direction:column; gap:10px; position:relative; }
@@ -257,7 +273,9 @@ const server = http.createServer(async (req, res) => {
   // 1. Dashboard Routes
   if (pathname === "/health") {
     const gatewayReady = await probeGatewayHealth();
-    res.writeHead(gatewayReady ? 200 : 503, { "Content-Type": "application/json" });
+    res.writeHead(gatewayReady ? 200 : 503, {
+      "Content-Type": "application/json",
+    });
     return res.end(
       JSON.stringify({
         status: gatewayReady ? "ok" : "degraded",
@@ -373,5 +391,7 @@ server.on("upgrade", (req, socket, head) => {
 server.timeout = 0;
 server.keepAliveTimeout = 65000;
 server.listen(PORT, "0.0.0.0", () =>
-  console.log(`🦞 HuggingClaw Dashboard on ${PORT} -> Gateway on ${GATEWAY_PORT}`),
+  console.log(
+    `🦞 HuggingClaw Dashboard on ${PORT} -> Gateway on ${GATEWAY_PORT}`,
+  ),
 );
