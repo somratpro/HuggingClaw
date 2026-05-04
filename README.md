@@ -137,7 +137,6 @@ This is the easiest way. HuggingClaw will handle the deployment for you.
 - It generates a secure, private `CLOUDFLARE_PROXY_SECRET`.
 - All restricted outbound traffic is automatically routed through this Worker.
 
-
 ## 💬 WhatsApp Setup *(Optional)*
 
 To use WhatsApp, enable the channel and scan the QR code from the Control UI (**Channels** → **WhatsApp** → **Login**):
@@ -314,7 +313,7 @@ Similar projects by [@somratpro](https://github.com/somratpro) — all free, one
 
 | Project | What it runs | HF Space | GitHub |
 | :--- | :--- | :--- | :--- |
-| **HuggingMess** | Hermes — Self-hosted agent gateway | [Space](https://huggingface.co/spaces/somratpro/HuggingMess) | [Repo](https://github.com/somratpro/huggingmess) |
+| **HuggingMes** | Hermes — Self-hosted agent gateway | [Space](https://huggingface.co/spaces/somratpro/HuggingMes) | [Repo](https://github.com/somratpro/huggingmes) |
 | **Hugging8n** | n8n — workflow & automation platform | [Space](https://huggingface.co/spaces/somratpro/Hugging8n) | [Repo](https://github.com/somratpro/hugging8n) |
 | **HuggingClip** | Paperclip — AI agent orchestration platform | [Space](https://huggingface.co/spaces/somratpro/HuggingClip) | [Repo](https://github.com/somratpro/huggingclip) |
 
