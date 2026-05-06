@@ -1,0 +1,17 @@
+services:
+  divya-backend:
+    build: .
+    container_name: divya-backend
+    ports:
+      - "8000:8000"
+    environment:
+      DIVYA_MODEL_BASE_URL: ${DIVYA_MODEL_BASE_URL:-http://host.docker.internal:11434/v1}
+      DIVYA_MODEL_API_KEY: ${DIVYA_MODEL_API_KEY:-}
+      DIVYA_MODEL_ID: ${DIVYA_MODEL_ID:-llama3}
+      DIVYA_ADMIN_TOKEN: ${DIVYA_ADMIN_TOKEN:-divya-dev-token}
+      DIVYA_ALLOWED_ORIGINS: ${DIVYA_ALLOWED_ORIGINS:-*}
+      DIVYA_RATE_LIMIT_PER_MINUTE: ${DIVYA_RATE_LIMIT_PER_MINUTE:-120}
+    volumes:
+      - divya_data:/divya
+volumes:
+  divya_data:
