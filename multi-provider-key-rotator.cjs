@@ -175,18 +175,35 @@ function normalizeKeys(...inputs) {
 
 // Build per-provider key pools + rotation indices
 const providerState = PROVIDERS.map(p => {
-  const keys = normalizeKeys(
+  const dedicatedKeys = normalizeKeys(
     process.env[p.envPlural]  || '',
     process.env[p.envSingular] || '',
-    process.env.LLM_API_KEY   || '',
   );
-  if (!keys.length) {
-    console.warn(`[key-rotator] No keys for provider "${p.name}"`);
-  } else {
+  const hasDedicated = dedicatedKeys.length > 0;
+  const keys = hasDedicated
+    ? dedicatedKeys
+    : normalizeKeys(process.env.LLM_API_KEY || '');
+
+  if (hasDedicated) {
     console.log(`[key-rotator] ${p.name}: ${keys.length} key${keys.length === 1 ? '' : 's'}`);
+  } else if (!keys.length) {
+    console.warn(`[key-rotator] No keys for provider "${p.name}"`);
   }
+
   return { ...p, keys, idx: 0 };
 });
+
+// Summarise providers that fall back to LLM_API_KEY
+const fallbackCount = providerState.filter(p => {
+  const dedicated = normalizeKeys(
+    process.env[p.envPlural]  || '',
+    process.env[p.envSingular] || '',
+  );
+  return dedicated.length === 0 && p.keys.length > 0;
+}).length;
+if (fallbackCount > 0) {
+  console.log(`[key-rotator] ${fallbackCount} provider(s) using LLM_API_KEY fallback`);
+}
 
 // ─── Runtime helpers ─────────────────────────────────────────────────────────
 

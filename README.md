@@ -20,6 +20,10 @@ secrets:
     description: "Comma-separated Telegram user IDs for access"
   - name: TELEGRAM_BOT_TOKEN
     description: "Telegram bot token from BotFather"
+  - name: HF_TOKEN
+    description: "HuggingFace token with Write access — enables automatic workspace backup."
+  - name: WHATSAPP_ENABLED
+    description: "Set to 'true' to enable WhatsApp pairing support."
 ---
 
 <!-- Badges -->
@@ -41,6 +45,7 @@ secrets:
 - [💾 Workspace Backup *(Optional)*](#-workspace-backup-optional)
 - [🔔 Webhooks *(Optional)*](#-webhooks-optional)
 - [🔐 Security & Advanced *(Optional)*](#-security--advanced-optional)
+- [🔑 API Key Rotation *(Optional)*](#-api-key-rotation-optional)
 - [🤖 LLM Providers](#-llm-providers)
 - [💻 Local Development](#-local-development)
 - [🔗 CLI Access](#-cli-access)
@@ -54,6 +59,7 @@ secrets:
 ## ✨ Features
 
 - 🔌 **Any LLM:** Use Claude, OpenAI GPT, Google Gemini, Grok, DeepSeek, Qwen, and 40+ providers (set `LLM_API_KEY` and `LLM_MODEL` accordingly).
+- 🔑 **Multi-Key Rotation:** Supply comma-separated key pools per provider (e.g. `ANTHROPIC_API_KEYS=key1,key2,key3`) for automatic round-robin rotation across rate limits.
 - ⚡ **Zero Config:** Duplicate this Space and set **just three** secrets (LLM_API_KEY, LLM_MODEL, GATEWAY_TOKEN) – no other setup needed.
 - 🐳 **Fast Builds:** Uses a pre-built OpenClaw Docker image to deploy in minutes.
 - 🌐 **Cloudflare Outbound Proxy:** HuggingClaw can automatically provision a Cloudflare Worker proxy for blocked outbound traffic such as Telegram API requests.
@@ -180,6 +186,29 @@ Configure password access and network restrictions:
 | `TRUSTED_PROXIES` | — | Comma-separated IPs of HF proxies |
 | `ALLOWED_ORIGINS` | — | Comma-separated allowed origins for Control UI |
 | `CLOUDFLARE_KEEPALIVE_ENABLED` | `true` | Set to `false` to disable the automatic Cloudflare KeepAlive worker |
+
+## 🔑 API Key Rotation *(Optional)*
+
+Spread requests across multiple API keys to avoid rate limits. Supply a comma-separated pool for any provider — keys rotate round-robin per provider independently.
+
+```bash
+# Single provider, multiple keys
+ANTHROPIC_API_KEYS=sk-ant-key1,sk-ant-key2,sk-ant-key3
+
+# Multiple providers simultaneously
+OPENAI_API_KEYS=sk-openai-key1,sk-openai-key2
+GEMINI_API_KEYS=AIza-key1,AIza-key2
+```
+
+**Fallback chain** (per provider):
+1. `{PROVIDER}_API_KEYS` — comma-separated pool *(preferred)*
+2. `{PROVIDER}_API_KEY` — single dedicated key
+3. `LLM_API_KEY` — universal fallback *(default for all providers)*
+
+> [!TIP]
+> If you only set `LLM_API_KEY`, all providers use it as a fallback automatically — no extra config needed. Add per-provider pools only when you need multi-key rotation.
+
+Supported per-provider variables: `ANTHROPIC_API_KEYS`, `OPENAI_API_KEYS`, `GEMINI_API_KEYS`, `DEEPSEEK_API_KEYS`, `GROQ_API_KEYS`, `MISTRAL_API_KEYS`, `OPENROUTER_API_KEYS`, `XAI_API_KEYS`, `NVIDIA_API_KEYS`, `COHERE_API_KEYS`, `TOGETHER_API_KEYS`, `CEREBRAS_API_KEYS`, and more — see `.env.example` for the full list.
 
 ## 🤖 LLM Providers
 
