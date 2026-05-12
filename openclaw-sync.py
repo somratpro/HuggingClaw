@@ -43,6 +43,10 @@ CONFIG_WATCH_INTERVAL = max(
     0.5,
     float(os.environ.get("OPENCLAW_CONFIG_WATCH_INTERVAL", "1")),
 )
+CONFIG_SETTLE_SECONDS = max(
+    0.0,
+    float(os.environ.get("OPENCLAW_CONFIG_SETTLE_SECONDS", "3")),
+)
 HF_TOKEN = os.environ.get("HF_TOKEN", "").strip()
 HF_USERNAME = os.environ.get("HF_USERNAME", "").strip()
 SPACE_AUTHOR_NAME = os.environ.get("SPACE_AUTHOR_NAME", "").strip()
@@ -440,13 +444,46 @@ def handle_signal(_sig, _frame) -> None:
     STOP_EVENT.set()
 
 
+def is_valid_json_file(path: Path) -> bool:
+    if not path.exists():
+        return True
+
+    try:
+        json.loads(path.read_text(encoding="utf-8"))
+        return True
+    except Exception:
+        return False
+
+
+def wait_for_config_settle(config_marker: tuple[int, int, int]) -> tuple[str, tuple[int, int, int]]:
+    stable_since = time.monotonic()
+    current_marker = config_marker
+
+    while not STOP_EVENT.is_set():
+        latest_marker = file_marker(OPENCLAW_CONFIG_FILE)
+        if latest_marker != current_marker:
+            current_marker = latest_marker
+            stable_since = time.monotonic()
+
+        if (
+            time.monotonic() - stable_since >= CONFIG_SETTLE_SECONDS
+            and is_valid_json_file(OPENCLAW_CONFIG_FILE)
+        ):
+            return ("settled", current_marker)
+
+        if STOP_EVENT.wait(CONFIG_WATCH_INTERVAL):
+            return ("stopped", current_marker)
+
+    return ("stopped", current_marker)
+
+
 def wait_for_sync_trigger(config_marker: tuple[int, int, int]) -> tuple[str, tuple[int, int, int]]:
     deadline = time.monotonic() + max(0, INTERVAL)
 
     while not STOP_EVENT.is_set():
         current_config_marker = file_marker(OPENCLAW_CONFIG_FILE)
         if current_config_marker != config_marker:
-            return ("openclaw_config_changed", current_config_marker)
+            return wait_for_config_settle(current_config_marker)
 
         remaining = deadline - time.monotonic()
         if remaining <= 0:
@@ -511,7 +548,10 @@ def loop() -> int:
             config_marker = file_marker(OPENCLAW_CONFIG_FILE)
 
             if config_marker != sync_started_config_marker:
-                print("OpenClaw config changed during sync; syncing again immediately.")
+                trigger, config_marker = wait_for_config_settle(config_marker)
+                if trigger == "stopped":
+                    break
+                print("OpenClaw config changed during sync; syncing again after it settled.")
                 continue
         except Exception as exc:
             write_status("error", f"Sync failed: {exc}")
@@ -521,8 +561,8 @@ def loop() -> int:
         trigger, config_marker = wait_for_sync_trigger(config_marker)
         if trigger == "stopped":
             break
-        if trigger == "openclaw_config_changed":
-            print("OpenClaw config changed; syncing immediately.")
+        if trigger == "settled":
+            print("OpenClaw config changed and settled; syncing immediately.")
 
     return 0
 

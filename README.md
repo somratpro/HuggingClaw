@@ -164,6 +164,7 @@ HuggingClaw automatically syncs your workspace (chats, settings, sessions) to a 
 | `HF_TOKEN` | — | HF token with **Write** access |
 | `SYNC_INTERVAL` | `180` | Full backup frequency in seconds |
 | `OPENCLAW_CONFIG_WATCH_INTERVAL` | `1` | How often to check `openclaw.json` for immediate settings sync |
+| `OPENCLAW_CONFIG_SETTLE_SECONDS` | `3` | How long `openclaw.json` must stay valid and unchanged before syncing |
 
 ## 📦 Ephemeral Package Re-install *(Optional)*
 
