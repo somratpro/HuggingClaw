@@ -129,8 +129,19 @@ mkdir -p /home/node/.openclaw/credentials
 mkdir -p /home/node/.openclaw/memory
 mkdir -p /home/node/.openclaw/extensions
 mkdir -p /home/node/.openclaw/workspace
+mkdir -p /home/node/.local/bin /home/node/.local/lib /home/node/.npm-global
 chmod 700 /home/node/.openclaw
 chmod 700 /home/node/.openclaw/credentials
+
+# User-installed packages are intentionally ephemeral in the container. Keep
+# npm/pip installs in user-writable locations, make apt noninteractive,
+# and persist only a tiny replay script in the synced workspace so packages
+# are re-installed after restart.
+export NPM_CONFIG_PREFIX="${NPM_CONFIG_PREFIX:-/home/node/.local}"
+export npm_config_prefix="$NPM_CONFIG_PREFIX"
+export PYTHONUSERBASE="${PYTHONUSERBASE:-/home/node/.local}"
+export DEBIAN_FRONTEND="${DEBIAN_FRONTEND:-noninteractive}"
+STARTUP_FILE="/home/node/.openclaw/workspace/startup.sh"
 
 # ── Restore workspace/state from HF Dataset ──
 BACKUP_DATASET="${BACKUP_DATASET_NAME:-huggingclaw-backup}"
@@ -421,19 +432,36 @@ fi
 
 # Write config
 EXISTING_CONFIG="/home/node/.openclaw/openclaw.json"
+WHATSAPP_CONFIG_ENABLED=false
+if [ "$WHATSAPP_ENABLED_NORMALIZED" = "true" ]; then
+  WHATSAPP_CONFIG_ENABLED=true
+fi
 if [ -f "$EXISTING_CONFIG" ]; then
-  echo "Restored config found — patching required fields only..."
+  echo "Restored config found — patching required fields and runtime channel/plugin toggles..."
   PATCHED=$(jq \
     --arg token "$GATEWAY_TOKEN" \
     --arg model "$LLM_MODEL" \
     --arg fileLevel "$OPENCLAW_FILE_LOG_LEVEL" \
     --arg consoleLevel "$OPENCLAW_CONSOLE_LOG_LEVEL" \
     --arg consoleStyle "$OPENCLAW_CONSOLE_LOG_STYLE" \
+    --argjson desired "$CONFIG_JSON" \
+    --argjson whatsappEnabled "$WHATSAPP_CONFIG_ENABLED" \
     '.gateway.auth.token = $token
      | .agents.defaults.model = $model
      | .logging.level = $fileLevel
      | .logging.consoleLevel = $consoleLevel
-     | .logging.consoleStyle = $consoleStyle' \
+     | .logging.consoleStyle = $consoleStyle
+     | .channels = ((.channels // {}) * ($desired.channels // {}))
+     | .plugins.allow = (((.plugins.allow // []) + ($desired.plugins.allow // [])) | unique)
+     | .plugins.deny = (((.plugins.deny // []) + ($desired.plugins.deny // [])) | unique)
+     | .plugins.entries = ((.plugins.entries // {}) * ($desired.plugins.entries // {}))
+     | if $whatsappEnabled then
+         .plugins.entries.whatsapp.enabled = true
+         | .channels.whatsapp = ($desired.channels.whatsapp // {"dmPolicy": "pairing"})
+       else
+         .plugins.entries.whatsapp.enabled = false
+         | del(.channels.whatsapp)
+       end' \
     "$EXISTING_CONFIG" 2>/dev/null)
 
   if [ -n "$PATCHED" ]; then
@@ -537,26 +565,190 @@ if [ -n "${CLOUDFLARE_WORKERS_TOKEN:-}" ]; then
 fi
 
 # ── Write shell capture wrappers to .bashrc ──
-STARTUP_FILE="/home/node/.openclaw/workspace/startup.sh"
+# The wrappers persist only install commands, not downloaded package files.
+# On the next boot the synced workspace/startup.sh replays those commands.
+if [ ! -f "$STARTUP_FILE" ]; then
+  touch "$STARTUP_FILE"
+  chmod +x "$STARTUP_FILE"
+  echo "Created workspace/startup.sh"
+fi
 cat > /home/node/.bashrc << 'BASHRC'
+export PATH="/home/node/.local/bin:$PATH"
+export NPM_CONFIG_PREFIX="${NPM_CONFIG_PREFIX:-/home/node/.local}"
+export npm_config_prefix="$NPM_CONFIG_PREFIX"
+export PYTHONUSERBASE="${PYTHONUSERBASE:-/home/node/.local}"
+export DEBIAN_FRONTEND="${DEBIAN_FRONTEND:-noninteractive}"
 STARTUP_FILE="/home/node/.openclaw/workspace/startup.sh"
 _hc_append() {
   local line="$*"
+  mkdir -p "$(dirname "$STARTUP_FILE")"
+  touch "$STARTUP_FILE"
+  chmod +x "$STARTUP_FILE" 2>/dev/null || true
   grep -qxF "$line" "$STARTUP_FILE" 2>/dev/null || echo "$line" >> "$STARTUP_FILE"
 }
+_hc_quote_args() {
+  local quoted=()
+  local arg
+  for arg in "$@"; do
+    printf -v arg '%q' "$arg"
+    quoted+=("$arg")
+  done
+  printf '%s' "${quoted[*]}"
+}
+_hc_append_cmd() {
+  local cmd="$1"
+  shift
+  local args
+  args=$(_hc_quote_args "$@")
+  if [ -n "$args" ]; then
+    _hc_append "$cmd $args"
+  else
+    _hc_append "$cmd"
+  fi
+}
+_hc_allow_openclaw_plugins() {
+  local config="/home/node/.openclaw/openclaw.json"
+  [ -f "$config" ] || return 0
+
+  local plugins=()
+  local plugin
+  for plugin in "$@"; do
+    [ -n "$plugin" ] || continue
+    [[ "$plugin" == -* ]] && continue
+    plugins+=("$plugin")
+    if [[ "$plugin" == @openclaw/* ]]; then
+      plugins+=("${plugin#@openclaw/}")
+    fi
+  done
+  [ "${#plugins[@]}" -gt 0 ] || return 0
+
+  local plugins_json
+  plugins_json=$(printf '%s\n' "${plugins[@]}" | jq -R 'select(length > 0)' | jq -s 'unique') || return 0
+  jq --argjson plugins "$plugins_json" \
+    '.plugins.allow = (((.plugins.allow // []) + $plugins) | unique)' \
+    "$config" > "$config.tmp" && mv "$config.tmp" "$config"
+}
+_hc_has_arg() {
+  local needle="$1"
+  shift
+  local arg
+  for arg in "$@"; do
+    [ "$arg" = "$needle" ] && return 0
+  done
+  return 1
+}
+_hc_can_sudo_apt() {
+  command -v sudo >/dev/null 2>&1 && sudo -n apt-get --version >/dev/null 2>&1
+}
+_hc_apt_install() {
+  if [ "$(id -u)" -eq 0 ]; then
+    command apt-get update && command apt-get install -y "$@"
+  elif _hc_can_sudo_apt; then
+    sudo apt-get update && sudo apt-get install -y "$@"
+  else
+    echo "Error: apt install needs root. Rebuild with the latest HuggingClaw image or add packages to Dockerfile." >&2
+    return 1
+  fi
+}
 apt-get() {
-  command apt-get "$@"
-  [[ "$1" == "install" ]] && _hc_append "apt-get install -y ${@:2}"
+  case "${1:-}" in
+    install)
+      shift
+      _hc_apt_install "$@"
+      local rc=$?
+      if [ $rc -eq 0 ]; then
+        _hc_append_cmd "sudo apt-get update && sudo apt-get install -y" "$@"
+      fi
+      return $rc
+      ;;
+    update)
+      if [ "$(id -u)" -eq 0 ]; then
+        command apt-get "$@"
+      elif _hc_can_sudo_apt; then
+        sudo apt-get "$@"
+      else
+        command apt-get "$@"
+      fi
+      return $?
+      ;;
+    *)
+      command apt-get "$@"
+      return $?
+      ;;
+  esac
 }
 apt() {
-  command apt "$@"
-  [[ "$1" == "install" ]] && _hc_append "apt-get install -y ${@:2}"
+  case "${1:-}" in
+    install)
+      shift
+      _hc_apt_install "$@"
+      local rc=$?
+      if [ $rc -eq 0 ]; then
+        _hc_append_cmd "sudo apt-get update && sudo apt-get install -y" "$@"
+      fi
+      return $rc
+      ;;
+    update)
+      if [ "$(id -u)" -eq 0 ]; then
+        command apt "$@"
+      elif _hc_can_sudo_apt; then
+        sudo apt "$@"
+      else
+        command apt "$@"
+      fi
+      return $?
+      ;;
+    *)
+      command apt "$@"
+      return $?
+      ;;
+  esac
 }
-pip() { command pip "$@"; [[ "$1" == "install" ]] && _hc_append "pip install ${@:2}"; }
-pip3() { command pip3 "$@"; [[ "$1" == "install" ]] && _hc_append "pip3 install ${@:2}"; }
-npm() { command npm "$@"; [[ "$1" == "install" && "$2" == "-g" ]] && _hc_append "npm install -g ${@:3}"; }
-openclaw() { command openclaw "$@"; [[ "$1" == "plugins" && "$2" == "install" ]] && _hc_append "openclaw plugins install ${@:3}"; }
+pip() {
+  if [ "${1:-}" = "install" ] && [ -z "${VIRTUAL_ENV:-}" ] && ! _hc_has_arg --user "$@" && ! _hc_has_arg --prefix "$@"; then
+    command pip install --user "${@:2}"
+  else
+    command pip "$@"
+  fi
+  local rc=$?
+  if [ $rc -eq 0 ] && [ "${1:-}" = "install" ]; then
+    _hc_append_cmd "python3 -m pip install --user" "${@:2}"
+  fi
+  return $rc
+}
+pip3() {
+  if [ "${1:-}" = "install" ] && [ -z "${VIRTUAL_ENV:-}" ] && ! _hc_has_arg --user "$@" && ! _hc_has_arg --prefix "$@"; then
+    command pip3 install --user "${@:2}"
+  else
+    command pip3 "$@"
+  fi
+  local rc=$?
+  if [ $rc -eq 0 ] && [ "${1:-}" = "install" ]; then
+    _hc_append_cmd "python3 -m pip install --user" "${@:2}"
+  fi
+  return $rc
+}
+npm() {
+  command npm "$@"
+  local rc=$?
+  if [ $rc -eq 0 ] && [ "${1:-}" = "install" ] && { [ "${2:-}" = "-g" ] || [ "${2:-}" = "--global" ]; }; then
+    _hc_append_cmd "npm install -g" "${@:3}"
+  fi
+  return $rc
+}
+openclaw() {
+  command openclaw "$@"
+  local rc=$?
+  if [ $rc -eq 0 ] && [ "${1:-}" = "plugins" ] && [ "${2:-}" = "install" ]; then
+    _hc_allow_openclaw_plugins "${@:3}"
+    _hc_append_cmd "openclaw plugins install" "${@:3}"
+  fi
+  return $rc
+}
 BASHRC
+cat > /home/node/.profile <<'PROFILE'
+[ -f ~/.bashrc ] && . ~/.bashrc
+PROFILE
 echo "Shell capture wrappers ready."
 
 # ── Re-install previously installed plugins ──
@@ -580,6 +772,218 @@ if [ -f "$EXISTING_CONFIG" ]; then
   fi
 fi
 
+# ── Startup command runner ──
+# Runs user-provided boot commands one by one so failures are visible in logs.
+# By default failures are logged and boot continues; set
+# HUGGINGCLAW_STARTUP_STRICT=true to fail the Space startup on any error.
+HC_STARTUP_FAILURES=0
+HC_STARTUP_STRICT_NORMALIZED=$(printf '%s' "${HUGGINGCLAW_STARTUP_STRICT:-false}" | tr '[:upper:]' '[:lower:]')
+hc_run_startup_command() {
+  local source_label="$1"
+  local command_text="$2"
+  [ -n "$command_text" ] || return 0
+
+  echo "[startup:${source_label}] $command_text"
+  set +e
+  bash -lc "$command_text"
+  local rc=$?
+  set -e
+  if [ "$rc" -eq 0 ]; then
+    echo "[startup:${source_label}] ok"
+    return 0
+  fi
+
+  HC_STARTUP_FAILURES=$((HC_STARTUP_FAILURES + 1))
+  echo "ERROR: startup command failed (${source_label}, exit ${rc}): $command_text" >&2
+  return "$rc"
+}
+
+hc_run_startup_script() {
+  local source_label="$1"
+  local script_text="$2"
+  [ -n "$script_text" ] || return 0
+
+  local script_file
+  script_file=$(mktemp "/tmp/huggingclaw-startup-${source_label//[^A-Za-z0-9_.-]/_}.XXXXXX.sh")
+  {
+    # Load HuggingClaw's install wrappers for env-provided scripts too, so
+    # `apt install`, `pip install`, `npm install -g`, and OpenClaw plugin
+    # installs behave the same way as they do in the interactive shell.
+    echo '[ -f /home/node/.bashrc ] && . /home/node/.bashrc'
+    printf '%s\n' "$script_text"
+  } > "$script_file"
+  chmod 700 "$script_file"
+
+  echo "[startup:${source_label}] running script (${script_file})"
+  set +e
+  bash "$script_file"
+  local rc=$?
+  set -e
+  rm -f "$script_file"
+
+  if [ "$rc" -eq 0 ]; then
+    echo "[startup:${source_label}] ok"
+    return 0
+  fi
+
+  HC_STARTUP_FAILURES=$((HC_STARTUP_FAILURES + 1))
+  echo "ERROR: startup script failed (${source_label}, exit ${rc})" >&2
+  return "$rc"
+}
+hc_run_startup_script_b64() {
+  local source_label="$1"
+  local encoded_script="$2"
+  [ -n "$encoded_script" ] || return 0
+
+  local script_text
+  if ! script_text=$(printf '%s' "$encoded_script" | base64 -d 2>/dev/null); then
+    HC_STARTUP_FAILURES=$((HC_STARTUP_FAILURES + 1))
+    echo "ERROR: startup script base64 decode failed (${source_label})" >&2
+    return 1
+  fi
+
+  hc_run_startup_script "$source_label" "$script_text"
+}
+
+
+hc_run_startup_auto() {
+  local source_label="$1"
+  local payload="$2"
+  [ -n "$payload" ] || return 0
+
+  if [[ "$payload" == base64:* ]]; then
+    hc_run_startup_script_b64 "$source_label" "${payload#base64:}"
+  elif [[ "$payload" == b64:* ]]; then
+    hc_run_startup_script_b64 "$source_label" "${payload#b64:}"
+  else
+    hc_run_startup_script "$source_label" "$payload"
+  fi
+}
+
+hc_run_command_block() {
+  local source_label="$1"
+  local command_block="$2"
+  local line
+  local index=0
+
+  while IFS= read -r line || [ -n "$line" ]; do
+    # Skip blank lines and comments so multi-line env vars can be documented.
+    [[ "$line" =~ ^[[:space:]]*$ ]] && continue
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+
+    index=$((index + 1))
+    hc_run_startup_command "${source_label}[${index}]" "$line" || true
+  done <<< "$command_block"
+}
+
+sync_installed_plugins_into_allow() {
+  local config="/home/node/.openclaw/openclaw.json"
+  [ -f "$config" ] || return 0
+
+  local patched
+  patched=$(jq '
+    (.plugins.installs // {}) as $installs
+    | ($installs | keys) as $installed
+    | ($installed | map(if startswith("@openclaw/") then sub("^@openclaw/"; "") else . end)) as $short
+    | .plugins.allow = (((.plugins.allow // []) + $installed + $short) | unique)
+  ' "$config" 2>/dev/null) || {
+    echo "Warning: could not sync installed plugins into plugins.allow"
+    return 0
+  }
+
+  echo "$patched" > "$config.tmp" && mv "$config.tmp" "$config"
+}
+
+hc_finish_startup_commands() {
+  if [ "$HC_STARTUP_FAILURES" -gt 0 ]; then
+    echo "ERROR: ${HC_STARTUP_FAILURES} startup command(s) failed. Check the log lines above." >&2
+    if [ "$HC_STARTUP_STRICT_NORMALIZED" = "true" ] || [ "$HC_STARTUP_STRICT_NORMALIZED" = "1" ] || [ "$HC_STARTUP_STRICT_NORMALIZED" = "yes" ]; then
+      echo "ERROR: HUGGINGCLAW_STARTUP_STRICT=true, stopping startup." >&2
+      exit 1
+    fi
+  fi
+  return 0
+}
+
+# ── Optional package install lists from HF Variables/Secrets ──
+# These install package names every boot without persisting package files.
+# Use them when you prefer HF Variables over editing workspace/startup.sh.
+if [ -n "${HUGGINGCLAW_APT_PACKAGES:-}" ]; then
+  echo "Installing apt packages from HUGGINGCLAW_APT_PACKAGES..."
+  read -r -a HC_APT_PACKAGES <<< "$HUGGINGCLAW_APT_PACKAGES"
+  if command -v sudo >/dev/null 2>&1; then
+    if sudo apt-get update && sudo apt-get install -y "${HC_APT_PACKAGES[@]}"; then
+      echo "HUGGINGCLAW_APT_PACKAGES install complete."
+    else
+      HC_STARTUP_FAILURES=$((HC_STARTUP_FAILURES + 1))
+      echo "ERROR: HUGGINGCLAW_APT_PACKAGES install failed: ${HUGGINGCLAW_APT_PACKAGES}" >&2
+    fi
+  else
+    HC_STARTUP_FAILURES=$((HC_STARTUP_FAILURES + 1))
+    echo "ERROR: sudo is unavailable; HUGGINGCLAW_APT_PACKAGES install skipped" >&2
+  fi
+fi
+if [ -n "${HUGGINGCLAW_PIP_PACKAGES:-}" ]; then
+  echo "Installing Python packages from HUGGINGCLAW_PIP_PACKAGES..."
+  read -r -a HC_PIP_PACKAGES <<< "$HUGGINGCLAW_PIP_PACKAGES"
+  if python3 -m pip install --user "${HC_PIP_PACKAGES[@]}"; then
+    echo "HUGGINGCLAW_PIP_PACKAGES install complete."
+  else
+    HC_STARTUP_FAILURES=$((HC_STARTUP_FAILURES + 1))
+    echo "ERROR: HUGGINGCLAW_PIP_PACKAGES install failed: ${HUGGINGCLAW_PIP_PACKAGES}" >&2
+  fi
+fi
+if [ -n "${HUGGINGCLAW_NPM_PACKAGES:-}" ]; then
+  echo "Installing global npm packages from HUGGINGCLAW_NPM_PACKAGES..."
+  read -r -a HC_NPM_PACKAGES <<< "$HUGGINGCLAW_NPM_PACKAGES"
+  if npm install -g "${HC_NPM_PACKAGES[@]}"; then
+    echo "HUGGINGCLAW_NPM_PACKAGES install complete."
+  else
+    HC_STARTUP_FAILURES=$((HC_STARTUP_FAILURES + 1))
+    echo "ERROR: HUGGINGCLAW_NPM_PACKAGES install failed: ${HUGGINGCLAW_NPM_PACKAGES}" >&2
+  fi
+fi
+if [ -n "${HUGGINGCLAW_OPENCLAW_PLUGINS:-}" ]; then
+  echo "Installing OpenClaw plugins from HUGGINGCLAW_OPENCLAW_PLUGINS..."
+  read -r -a HC_OPENCLAW_PLUGINS <<< "$HUGGINGCLAW_OPENCLAW_PLUGINS"
+  if openclaw plugins install "${HC_OPENCLAW_PLUGINS[@]}"; then
+    echo "HUGGINGCLAW_OPENCLAW_PLUGINS install complete."
+  else
+    HC_STARTUP_FAILURES=$((HC_STARTUP_FAILURES + 1))
+    echo "ERROR: HUGGINGCLAW_OPENCLAW_PLUGINS install failed: ${HUGGINGCLAW_OPENCLAW_PLUGINS}" >&2
+  fi
+fi
+
+# ── Arbitrary startup commands from HF Variables/Secrets ──
+# Recommended: use one variable, HUGGINGCLAW_RUN, as a full bash script. If the
+# value starts with base64: or b64:, the rest is decoded and run as the script.
+# Legacy granular HUGGINGCLAW_STARTUP_* variables are still supported below.
+if [ -n "${HUGGINGCLAW_RUN:-}" ]; then
+  hc_run_startup_auto "HUGGINGCLAW_RUN" "$HUGGINGCLAW_RUN" || true
+fi
+if [ -n "${HUGGINGCLAW_STARTUP_COMMANDS:-}" ]; then
+  echo "Running commands from HUGGINGCLAW_STARTUP_COMMANDS..."
+  hc_run_command_block "HUGGINGCLAW_STARTUP_COMMANDS" "$HUGGINGCLAW_STARTUP_COMMANDS"
+fi
+for HC_STARTUP_INDEX in $(seq 1 100); do
+  HC_STARTUP_VAR="HUGGINGCLAW_STARTUP_COMMAND_${HC_STARTUP_INDEX}"
+  if [ -n "${!HC_STARTUP_VAR:-}" ]; then
+    hc_run_startup_command "$HC_STARTUP_VAR" "${!HC_STARTUP_VAR}" || true
+  fi
+done
+if [ -n "${HUGGINGCLAW_STARTUP_SCRIPT:-}" ]; then
+  hc_run_startup_script "HUGGINGCLAW_STARTUP_SCRIPT" "$HUGGINGCLAW_STARTUP_SCRIPT" || true
+fi
+if [ -n "${HUGGINGCLAW_STARTUP_SCRIPT_B64:-}" ]; then
+  hc_run_startup_script_b64 "HUGGINGCLAW_STARTUP_SCRIPT_B64" "$HUGGINGCLAW_STARTUP_SCRIPT_B64" || true
+fi
+for HC_STARTUP_INDEX in $(seq 1 20); do
+  HC_STARTUP_VAR="HUGGINGCLAW_STARTUP_SCRIPT_B64_${HC_STARTUP_INDEX}"
+  if [ -n "${!HC_STARTUP_VAR:-}" ]; then
+    hc_run_startup_script_b64 "$HC_STARTUP_VAR" "${!HC_STARTUP_VAR}" || true
+  fi
+done
+
 # ── Run workspace startup script ──
 STARTUP_FILE="/home/node/.openclaw/workspace/startup.sh"
 if [ ! -f "$STARTUP_FILE" ]; then
@@ -588,10 +992,12 @@ if [ ! -f "$STARTUP_FILE" ]; then
   echo "Created workspace/startup.sh"
 fi
 if [ -s "$STARTUP_FILE" ]; then
-  echo "Running workspace/startup.sh..."
-  bash "$STARTUP_FILE" || echo "Warning: startup.sh had errors, continuing..."
-  echo "Startup script complete."
+  echo "Running workspace/startup.sh script..."
+  hc_run_startup_script "workspace/startup.sh" "$(cat "$STARTUP_FILE")" || true
+  echo "Workspace startup script complete."
 fi
+hc_finish_startup_commands
+sync_installed_plugins_into_allow
 
 # ── Launch gateway ──
 echo "Launching OpenClaw gateway on port 7860..."

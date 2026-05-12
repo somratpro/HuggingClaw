@@ -14,6 +14,7 @@ ARG OPENCLAW_VERSION=latest
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     git \
+    sudo \
     ca-certificates \
     jq \
     curl \
@@ -44,9 +45,17 @@ RUN apt-get update && apt-get install -y \
     pip3 install --no-cache-dir --break-system-packages huggingface_hub && \
     rm -rf /var/lib/apt/lists/*
 
-# Reuse existing node user (UID 1000)
+# Reuse existing node user (UID 1000). Allow passwordless package-manager
+# commands only so runtime apt installs can be replayed after HF Space restarts
+# without granting unrestricted sudo access.
 RUN mkdir -p /home/node/app /home/node/.openclaw && \
-    chown -R 1000:1000 /home/node
+    chown -R 1000:1000 /home/node && \
+    printf '%s\n' \
+      'Cmnd_Alias HUGGINGCLAW_APT = /usr/bin/apt, /usr/bin/apt-get, /usr/bin/dpkg' \
+      'node ALL=(root) NOPASSWD: HUGGINGCLAW_APT' \
+      > /etc/sudoers.d/huggingclaw-apt && \
+    chmod 0440 /etc/sudoers.d/huggingclaw-apt && \
+    visudo -cf /etc/sudoers.d/huggingclaw-apt
 
 # Copy pre-built OpenClaw (skips npm install entirely — much faster!)
 COPY --from=openclaw --chown=1000:1000 /app /home/node/.openclaw/openclaw-app

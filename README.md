@@ -164,6 +164,51 @@ HuggingClaw automatically syncs your workspace (chats, settings, sessions) to a 
 | `HF_TOKEN` | — | HF token with **Write** access |
 | `SYNC_INTERVAL` | `180` | Backup frequency in seconds |
 
+## 📦 Ephemeral Package Re-install *(Optional)*
+
+Yes — you can use extra packages after a Space restart without storing package files. The easiest option is to remember **one variable**:
+
+| Variable | What to put in it |
+| :--- | :--- |
+| `HUGGINGCLAW_RUN` | Any bash commands you want to run on every startup |
+
+Example:
+
+```bash
+HUGGINGCLAW_RUN="""
+set -e
+sudo apt-get update
+sudo apt-get install -y ffmpeg
+python3 -m pip install --user pandas requests
+npm install -g typescript
+"""
+```
+
+For very quote-heavy or strange scripts, put a base64 script in the same variable:
+
+```bash
+# locally
+base64 -w0 setup.sh
+
+# HF Variable
+HUGGINGCLAW_RUN=base64:<paste-output-here>
+```
+
+How it works:
+
+1. `HUGGINGCLAW_RUN` is run as a full bash script on every boot before the OpenClaw gateway launches, so multi-line commands, `if`, loops, functions, and heredocs work. Long installs will delay gateway startup.
+2. Startup scripts load the same HuggingClaw shell wrappers as the interactive shell, so `apt install ...`, `pip install ...`, `npm install -g ...`, and `openclaw plugins install ...` behave consistently.
+3. OpenClaw plugins installed at startup are synced into `plugins.allow` before the gateway launches, so the gateway can load them instead of reporting them as not installed.
+4. If you install from the OpenClaw shell manually, HuggingClaw records only successful install commands in `/home/node/.openclaw/workspace/startup.sh` for replay. Failed or dummy commands are not saved by the wrapper.
+5. Package files are not persisted; commands are replayed to reconstruct them after restart.
+
+Errors are always printed as `ERROR:` lines in Space logs. By default HuggingClaw logs the error and continues booting; set `HUGGINGCLAW_STARTUP_STRICT=true` if the Space should fail fast when any startup install command fails.
+
+Advanced/backward-compatible variables still work if you prefer package-specific fields: `HUGGINGCLAW_APT_PACKAGES`, `HUGGINGCLAW_PIP_PACKAGES`, `HUGGINGCLAW_NPM_PACKAGES`, `HUGGINGCLAW_OPENCLAW_PLUGINS`, `HUGGINGCLAW_STARTUP_COMMANDS`, `HUGGINGCLAW_STARTUP_COMMAND_1`...`100`, `HUGGINGCLAW_STARTUP_SCRIPT`, and `HUGGINGCLAW_STARTUP_SCRIPT_B64`.
+
+> [!IMPORTANT]
+> `sudo` is available for package-manager commands only (`apt`, `apt-get`, and `dpkg`). This is enough for `sudo apt-get update` and `sudo apt-get install -y ...`, but it is not unrestricted root access. Apt-installed packages still disappear on Space restart, so put them in `HUGGINGCLAW_RUN` or let the shell wrapper record the command in `startup.sh`.
+
 ## 💓 Staying Alive *(Recommended on Free HF Spaces)*
 
 Your Space will automatically be kept awake by a background Cloudflare Worker when you configure the `CLOUDFLARE_WORKERS_TOKEN` secret. The worker uses a cron trigger to regularly ping your Space's `/health` endpoint. The dashboard displays the current keep-alive worker status.
