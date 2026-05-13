@@ -70,6 +70,7 @@ EXCLUDED_STATE_NAMES = {
     "openclaw-app",
     "gateway.log",
     "browser",
+    "npm",
 }
 WHATSAPP_CREDS_DIR = OPENCLAW_HOME / "credentials" / "whatsapp" / "default"
 WHATSAPP_BACKUP_DIR = STATE_DIR / "credentials" / "whatsapp" / "default"

@@ -250,10 +250,10 @@ GEMINI_API_KEYS=AIza-key1,AIza-key2
 **Fallback chain** (per provider):
 1. `{PROVIDER}_API_KEYS` — comma-separated pool *(preferred)*
 2. `{PROVIDER}_API_KEY` — single dedicated key
-3. `LLM_API_KEY` — universal fallback *(default for all providers)*
+3. `LLM_API_KEY` — universal fallback *(enabled by default; disable with `LLM_API_KEY_FALLBACK_ENABLED=false`)*
 
 > [!TIP]
-> If you only set `LLM_API_KEY`, all providers use it as a fallback automatically — no extra config needed. Add per-provider pools only when you need multi-key rotation.
+> By default, `LLM_API_KEY` fallback is enabled for compatibility. Set `LLM_API_KEY_FALLBACK_ENABLED=false` if you want strict provider-only activation.
 
 Supported per-provider variables: `ANTHROPIC_API_KEYS`, `OPENAI_API_KEYS`, `GEMINI_API_KEYS`, `DEEPSEEK_API_KEYS`, `GROQ_API_KEYS`, `MISTRAL_API_KEYS`, `OPENROUTER_API_KEYS`, `XAI_API_KEYS`, `NVIDIA_API_KEYS`, `COHERE_API_KEYS`, `TOGETHER_API_KEYS`, `CEREBRAS_API_KEYS`, and more — see `.env.example` for the full list.
 
