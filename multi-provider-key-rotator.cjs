@@ -8,7 +8,7 @@
  *
  * For each provider you can supply a comma-separated pool:
  *   ANTHROPIC_API_KEYS=key1,key2,key3
- * Falls back to the singular env var, then to LLM_API_KEY.
+ * Falls back to the singular env var, and optionally to LLM_API_KEY.
  *
  * Keys are rotated round-robin per provider independently.
  *
@@ -30,7 +30,9 @@ const log = (...args) => console.error(...args);
 // envPlural – env var that holds a comma-separated key pool  (preferred)
 // envSingular – env var that holds a single key              (fallback)
 //
-// LLM_API_KEY is the final fallback for every provider.
+// LLM_API_KEY fallback can be controlled via:
+//   LLM_API_KEY_FALLBACK_ENABLED=true|false
+// Default is enabled for backwards compatibility.
 //
 const PROVIDERS = [
   {
@@ -180,6 +182,8 @@ function normalizeKeys(...inputs) {
 
 // Build per-provider key pools + rotation indices
 const providerState = PROVIDERS.map(p => {
+  const llmFallbackRaw = String(process.env.LLM_API_KEY_FALLBACK_ENABLED || '').trim().toLowerCase();
+  const llmFallbackEnabled = !/^(0|false|no|off)$/.test(llmFallbackRaw);
   const dedicatedKeys = normalizeKeys(
     process.env[p.envPlural]  || '',
     process.env[p.envSingular] || '',
@@ -187,7 +191,11 @@ const providerState = PROVIDERS.map(p => {
   const hasDedicated = dedicatedKeys.length > 0;
   const keys = hasDedicated
     ? dedicatedKeys
-    : normalizeKeys(process.env.LLM_API_KEY || '');
+    : (
+      llmFallbackEnabled
+        ? normalizeKeys(process.env.LLM_API_KEY || '')
+        : []
+    );
 
   if (hasDedicated) {
     log(`[key-rotator] ${p.name}: ${keys.length} key${keys.length === 1 ? '' : 's'}`);
@@ -208,6 +216,8 @@ const fallbackCount = providerState.filter(p => {
 }).length;
 if (fallbackCount > 0) {
   log(`[key-rotator] ${fallbackCount} provider(s) using LLM_API_KEY fallback`);
+} else if (process.env.LLM_API_KEY && /^(0|false|no|off)$/i.test(String(process.env.LLM_API_KEY_FALLBACK_ENABLED || ''))) {
+  log('[key-rotator] LLM_API_KEY fallback disabled (set LLM_API_KEY_FALLBACK_ENABLED=true to re-enable)');
 }
 
 // ─── Runtime helpers ─────────────────────────────────────────────────────────
