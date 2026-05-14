@@ -433,6 +433,8 @@ fi
 #          plugins that the Control UI/dashboard needs to render correctly
 #          on HF Spaces. Without these the UI shows blank panels.
 #          telegram/whatsapp/browser/acpx are added conditionally below.
+#          Do not create a disabled acpx entry when the plugin is absent;
+#          OpenClaw reports that as a config warning on HF Spaces.
 #   DENY:  lmstudio crashes on boot when no local server is reachable;
 #          xai PLUGIN (separate from the xai model PROVIDER) is broken in
 #          current OpenClaw releases and prevents gateway start. Disabling
@@ -452,20 +454,17 @@ if [ "$WHATSAPP_ENABLED_NORMALIZED" = "true" ]; then
 fi
 
 # Apply plugin allow/deny + per-entry toggles in one jq pass.
-ACPX_DISABLED=false
-if [ "$ACP_PLUGIN_MODE" = "disabled" ]; then ACPX_DISABLED=true; fi
 BROWSER_DISABLED=true
 if [ "$BROWSER_SHOULD_ENABLE" = "true" ]; then BROWSER_DISABLED=false; fi
 
 CONFIG_JSON=$(jq \
   --argjson allow "$PLUGIN_ALLOW_JSON" \
-  --argjson acpxDisabled "$ACPX_DISABLED" \
   --argjson browserDisabled "$BROWSER_DISABLED" \
   '.plugins.allow = $allow
    | .plugins.deny = ["lmstudio","xai"]
    | .plugins.entries.lmstudio.enabled = false
    | .plugins.entries.xai.enabled = false
-   | (if $acpxDisabled then .plugins.entries.acpx.enabled = false else . end)
+   | del(.plugins.entries.acpx)
    | (if $browserDisabled then
         .plugins.entries.browser.enabled = false | .browser.enabled = false
       else . end)' <<<"$CONFIG_JSON")
@@ -650,7 +649,7 @@ if [ -n "${CLOUDFLARE_PROXY_URL:-}" ]; then
   echo "Proxy     : ${CLOUDFLARE_PROXY_URL}"
 fi
 if [ -n "${SPACE_HOST:-}" ]; then
-  echo "Control UI: https://${SPACE_HOST}/app"
+  echo "Control UI: https://${SPACE_HOST}/app/"
   echo "Terminal  : https://${SPACE_HOST}/terminal/ (token: ${JUPYTER_TOKEN:-huggingface})"
 fi
 echo ""
@@ -718,10 +717,10 @@ jupyter-lab \
     --ip 127.0.0.1 \
     --port 8888 \
     --no-browser \
-    --ServerApp.token="$JUPYTER_TOKEN" \
+    --IdentityProvider.token="$JUPYTER_TOKEN" \
     --ServerApp.base_url=/terminal/ \
     --ServerApp.tornado_settings="{'headers': {'Content-Security-Policy': 'frame-ancestors *'}}" \
-    --ServerApp.cookie_options="{'SameSite': 'None', 'Secure': True}" \
+    --IdentityProvider.cookie_options="{'SameSite': 'None', 'Secure': True}" \
     --ServerApp.disable_check_xsrf=True \
     --LabApp.news_url=None \
     --LabApp.check_for_updates_class="jupyterlab.NeverCheckForUpdate" \

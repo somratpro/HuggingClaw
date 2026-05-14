@@ -1,12 +1,41 @@
-# Local dependency installs
+# env/secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# node
 node_modules/
 gui/node_modules/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
 
-# Runtime logs and temp files
-*.log
-.tmp/
-tmp/
-
-# Python bytecode
+# python
 __pycache__/
 *.py[cod]
+.venv/
+venv/
+
+# logs
+logs/
+*.log
+
+# local configs
+.vscode/
+.idea/
+
+# build/cache
+dist/
+build/
+.cache/
+
+# temp
+.tmp/
+tmp/
+temp/
+
+# os junk
+.DS_Store
+Thumbs.db
