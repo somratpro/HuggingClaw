@@ -1,0 +1,12 @@
+# Local dependency installs
+node_modules/
+gui/node_modules/
+
+# Runtime logs and temp files
+*.log
+.tmp/
+tmp/
+
+# Python bytecode
+__pycache__/
+*.py[cod]

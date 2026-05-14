@@ -151,7 +151,54 @@ function renderDashboard(data) {
 }
 
 // ── Generic proxy ──
-function proxyHTTP(req, res, targetHost, targetPort) {
+function proxiedPath(url, { stripPrefix = "" } = {}) {
+  if (!stripPrefix) return url.pathname + url.search;
+  if (url.pathname === stripPrefix) return "/" + url.search;
+  if (url.pathname.startsWith(stripPrefix + "/")) {
+    return url.pathname.slice(stripPrefix.length) + url.search;
+  }
+  return url.pathname + url.search;
+}
+
+function rewriteProxyHeaders(headers, { publicPrefix = "", targetHost = "", targetPort = "" } = {}) {
+  const next = { ...headers };
+
+  // Keep browser redirects inside the public HF Space path. Backends may emit
+  // root-relative redirects ("/login") or absolute redirects pointing at their
+  // internal listener ("http://127.0.0.1:8888/..."). Both break from a browser
+  // if we do not normalize them back to the public mount path.
+  if (publicPrefix && typeof next.location === "string") {
+    try {
+      const internalOrigins = new Set([
+        "http://huggingclaw.local",
+        `http://${targetHost}:${targetPort}`,
+        `http://localhost:${targetPort}`,
+        `http://127.0.0.1:${targetPort}`,
+      ]);
+      const location = new URL(next.location, "http://huggingclaw.local");
+      if (internalOrigins.has(location.origin)) {
+        let path = location.pathname;
+        if (path !== publicPrefix && !path.startsWith(publicPrefix + "/")) {
+          path = publicPrefix + (path.startsWith("/") ? path : `/${path}`);
+        }
+        next.location = path + location.search + location.hash;
+      }
+    } catch {}
+  }
+
+  return next;
+}
+
+function sendServiceUnavailable(res) {
+  if (!res.headersSent) {
+    res.writeHead(503, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ status: "starting", message: "Service is initializing… please wait." }));
+  } else {
+    res.end();
+  }
+}
+
+function proxyHTTP(req, res, targetHost, targetPort, options = {}) {
   const url = parseRequestUrl(req.url);
   const headers = {
     ...req.headers,
@@ -159,21 +206,31 @@ function proxyHTTP(req, res, targetHost, targetPort) {
     "x-forwarded-for": req.socket.remoteAddress,
     "x-forwarded-host": req.headers.host,
     "x-forwarded-proto": "https",
+    "x-forwarded-prefix": options.publicPrefix || "",
   };
-  const pr = http.request({ hostname: targetHost, port: targetPort, path: url.pathname + url.search, method: req.method, headers }, (pres) => {
-    res.writeHead(pres.statusCode, pres.headers);
-    pres.pipe(res);
-    pres.on("error", () => res.end());
-  });
-  req.on("error", () => pr.destroy());
-  res.on("error", () => pr.destroy());
-  pr.on("error", () => {
-    if (!res.headersSent) {
-      res.writeHead(503, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ status: "starting", message: "Service is initializing… please wait." }));
-    } else res.end();
-  });
-  req.pipe(pr);
+
+  const canReplayRequest = req.method === "GET" || req.method === "HEAD";
+  const proxyOnce = (path, retryOn404) => {
+    const pr = http.request({ hostname: targetHost, port: targetPort, path, method: req.method, headers }, (pres) => {
+      if (canReplayRequest && retryOn404 && pres.statusCode === 404 && options.stripPrefix) {
+        pres.resume();
+        return proxyOnce(proxiedPath(url, { stripPrefix: options.stripPrefix }), false);
+      }
+      res.writeHead(pres.statusCode, rewriteProxyHeaders(pres.headers, { ...options, targetHost, targetPort }));
+      pres.pipe(res);
+      pres.on("error", () => res.end());
+    });
+    req.on("error", () => pr.destroy());
+    res.on("error", () => pr.destroy());
+    pr.on("error", () => sendServiceUnavailable(res));
+    req.pipe(pr);
+  };
+
+  // First try the public path as-is because OpenClaw and JupyterLab are both
+  // configured with base paths. If a backend still returns 404, retry with the
+  // mount prefix stripped; that covers images built before the base-path config
+  // took effect and avoids the common HF Spaces "404 at /app or /terminal" trap.
+  proxyOnce(url.pathname + url.search, !!options.retryWithoutPrefixOn404);
 }
 
 // ── HTTP server ──
@@ -206,10 +263,24 @@ const server = http.createServer(async (req, res) => {
 
   // JupyterLab terminal
   if (pathname === JUPYTER_BASE || pathname.startsWith(JUPYTER_BASE + "/")) {
-    return proxyHTTP(req, res, JUPYTER_HOST, JUPYTER_PORT);
+    return proxyHTTP(req, res, JUPYTER_HOST, JUPYTER_PORT, {
+      publicPrefix: JUPYTER_BASE,
+      stripPrefix: JUPYTER_BASE,
+      retryWithoutPrefixOn404: true,
+    });
   }
 
-  // OpenClaw gateway (everything else)
+  // OpenClaw Control UI mounted under /app. Retry without the mount prefix on
+  // 404 so deployments keep working across OpenClaw basePath behavior changes.
+  if (pathname === APP_BASE || pathname.startsWith(APP_BASE + "/")) {
+    return proxyHTTP(req, res, GATEWAY_HOST, GATEWAY_PORT, {
+      publicPrefix: APP_BASE,
+      stripPrefix: APP_BASE,
+      retryWithoutPrefixOn404: true,
+    });
+  }
+
+  // OpenClaw gateway API/static fallback (everything else)
   proxyHTTP(req, res, GATEWAY_HOST, GATEWAY_PORT);
 });
 
@@ -217,12 +288,24 @@ const server = http.createServer(async (req, res) => {
 server.on("upgrade", (req, socket, head) => {
   const { pathname, search } = parseRequestUrl(req.url);
   const isJupyter = pathname === JUPYTER_BASE || pathname.startsWith(JUPYTER_BASE + "/");
+  const isApp = pathname === APP_BASE || pathname.startsWith(APP_BASE + "/");
   const [targetHost, targetPort] = isJupyter ? [JUPYTER_HOST, JUPYTER_PORT] : [GATEWAY_HOST, GATEWAY_PORT];
+  const publicPrefix = isJupyter ? JUPYTER_BASE : isApp ? APP_BASE : "";
+  const targetPath = pathname + search;
 
   const ps = net.connect(targetPort, targetHost, () => {
-    ps.write(`${req.method} ${pathname}${search} HTTP/${req.httpVersion}\r\n`);
-    for (let i = 0; i < req.rawHeaders.length; i += 2)
-      ps.write(`${req.rawHeaders[i]}: ${req.rawHeaders[i + 1]}\r\n`);
+    ps.write(`${req.method} ${targetPath} HTTP/${req.httpVersion}\r\n`);
+    ps.write(`Host: ${targetHost}:${targetPort}\r\n`);
+    ps.write(`X-Forwarded-For: ${req.socket.remoteAddress || ""}\r\n`);
+    ps.write(`X-Forwarded-Host: ${req.headers.host || ""}\r\n`);
+    ps.write("X-Forwarded-Proto: https\r\n");
+    if (publicPrefix) ps.write(`X-Forwarded-Prefix: ${publicPrefix}\r\n`);
+    for (let i = 0; i < req.rawHeaders.length; i += 2) {
+      const header = req.rawHeaders[i];
+      const lower = header.toLowerCase();
+      if (["host", "x-forwarded-for", "x-forwarded-host", "x-forwarded-proto", "x-forwarded-prefix"].includes(lower)) continue;
+      ps.write(`${header}: ${req.rawHeaders[i + 1]}\r\n`);
+    }
     ps.write("\r\n");
     if (head && head.length) ps.write(head);
     ps.pipe(socket).pipe(ps);

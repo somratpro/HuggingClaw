@@ -48,8 +48,9 @@ RUN apt-get update && apt-get install -y \
     --no-install-recommends && \
     pip3 install --no-cache-dir --break-system-packages \
         huggingface_hub \
-        jupyterlab==4.3.6 \
-        ipywidgets && \
+        jupyterlab==4.5.7 \
+        tornado==6.5.5 \
+        ipywidgets==8.1.8 && \
     rm -rf /var/lib/apt/lists/*
 
 # Reuse existing node user (UID 1000). Allow passwordless package-manager
@@ -80,12 +81,14 @@ RUN ln -s /home/node/.openclaw/openclaw-app/openclaw.mjs /usr/local/bin/openclaw
 COPY --chown=1000:1000 cloudflare-proxy.js /opt/cloudflare-proxy.js
 COPY --chown=1000:1000 cloudflare-proxy-setup.py /home/node/app/cloudflare-proxy-setup.py
 COPY --chown=1000:1000 health-server.js /home/node/app/health-server.js
+COPY --chown=1000:1000 login.html /home/node/app/login.html
 COPY --chown=1000:1000 iframe-fix.cjs /home/node/app/iframe-fix.cjs
 COPY --chown=1000:1000 start.sh /home/node/app/start.sh
 COPY --chown=1000:1000 wa-guardian.js /home/node/app/wa-guardian.js
 COPY --chown=1000:1000 cloudflare-keepalive-setup.py /home/node/app/cloudflare-keepalive-setup.py
 COPY --chown=1000:1000 openclaw-sync.py /home/node/app/openclaw-sync.py
 COPY --chown=1000:1000 multi-provider-key-rotator.cjs /home/node/app/multi-provider-key-rotator.cjs
+RUN python3 -c "from pathlib import Path; import shutil, jupyter_server; template_dir = Path(jupyter_server.__file__).parent / 'templates'; template_dir.mkdir(parents=True, exist_ok=True); shutil.copyfile('/home/node/app/login.html', template_dir / 'login.html')"
 RUN chmod +x /home/node/app/start.sh \
               /home/node/app/cloudflare-proxy-setup.py \
               /home/node/app/cloudflare-keepalive-setup.py \

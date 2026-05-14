@@ -46,6 +46,16 @@ JupyterLab runs internally on **8888**.
 | `TELEGRAM_BOT_TOKEN` | — | Enable Telegram channel |
 | `WHATSAPP_ENABLED` | `false` | Enable WhatsApp channel |
 
+
+## Compared Sources
+
+This merged Space was checked against both upstream inputs:
+
+- `anurag162008/HuggingClaw` provides the OpenClaw gateway, dashboard, backup, Cloudflare, Telegram, and WhatsApp runtime.
+- The Hugging Face JupyterLab Space template provides the terminal behavior: JupyterLab token login, Hugging Face-branded login screen, and LFS defaults for large notebook/model artifacts.
+
+Merged routing keeps HuggingClaw on `/app/` and mounts the terminal on `/terminal/` through the single public HF Spaces port (`7861`).
+
 ## JupyterLab Terminal
 
 The terminal opens at `/terminal/` with the default token **`huggingface`** (override via `JUPYTER_TOKEN` secret).
