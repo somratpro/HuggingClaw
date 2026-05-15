@@ -63,7 +63,7 @@ function probePort(host, port, path, timeoutMs = 1500) {
   return new Promise((resolve) => {
     const req = http.get({ hostname: host, port, path, timeout: timeoutMs }, (res) => {
       res.resume();
-      resolve(res.statusCode >= 200 && res.statusCode < 500);
+      resolve(res.statusCode >= 200 && res.statusCode < 400);
     });
     req.on("timeout", () => { req.destroy(); resolve(false); });
     req.on("error", () => resolve(false));
