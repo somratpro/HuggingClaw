@@ -21,6 +21,13 @@ WHATSAPP_ENABLED_CONFIGURED=false
 [ "${WHATSAPP_ENABLED+x}" = "x" ] && WHATSAPP_ENABLED_CONFIGURED=true
 WHATSAPP_ENABLED="${WHATSAPP_ENABLED:-false}"
 WHATSAPP_ENABLED_NORMALIZED=$(printf '%s' "$WHATSAPP_ENABLED" | tr '[:upper:]' '[:lower:]')
+DEV_MODE_RAW="${DEV_MODE:-false}"
+DEV_MODE_NORMALIZED=$(printf '%s' "$DEV_MODE_RAW" | tr '[:upper:]' '[:lower:]')
+DEV_MODE_ENABLED=false
+case "$DEV_MODE_NORMALIZED" in
+  true|1|yes|on) DEV_MODE_ENABLED=true ;;
+  *) DEV_MODE_ENABLED=false ;;
+esac
 SYNC_INTERVAL="${SYNC_INTERVAL:-180}"
 if [ -n "${SPACE_HOST:-}" ]; then
   OPENCLAW_CONSOLE_LOG_LEVEL="${OPENCLAW_CONSOLE_LOG_LEVEL:-warn}"
@@ -39,7 +46,7 @@ else
 fi
 echo ""
 echo "  ╔══════════════════════════════════════════╗"
-echo "  ║          🦞 HuggingClaw Gateway          ║"
+echo "  ║     🦞 HuggingClaw + 💻 JupyterLab      ║"
 echo "  ╚══════════════════════════════════════════╝"
 echo ""
 
@@ -433,6 +440,8 @@ fi
 #          plugins that the Control UI/dashboard needs to render correctly
 #          on HF Spaces. Without these the UI shows blank panels.
 #          telegram/whatsapp/browser/acpx are added conditionally below.
+#          Do not create a disabled acpx entry when the plugin is absent;
+#          OpenClaw reports that as a config warning on HF Spaces.
 #   DENY:  lmstudio crashes on boot when no local server is reachable;
 #          xai PLUGIN (separate from the xai model PROVIDER) is broken in
 #          current OpenClaw releases and prevents gateway start. Disabling
@@ -452,20 +461,17 @@ if [ "$WHATSAPP_ENABLED_NORMALIZED" = "true" ]; then
 fi
 
 # Apply plugin allow/deny + per-entry toggles in one jq pass.
-ACPX_DISABLED=false
-if [ "$ACP_PLUGIN_MODE" = "disabled" ]; then ACPX_DISABLED=true; fi
 BROWSER_DISABLED=true
 if [ "$BROWSER_SHOULD_ENABLE" = "true" ]; then BROWSER_DISABLED=false; fi
 
 CONFIG_JSON=$(jq \
   --argjson allow "$PLUGIN_ALLOW_JSON" \
-  --argjson acpxDisabled "$ACPX_DISABLED" \
   --argjson browserDisabled "$BROWSER_DISABLED" \
   '.plugins.allow = $allow
    | .plugins.deny = ["lmstudio","xai"]
    | .plugins.entries.lmstudio.enabled = false
    | .plugins.entries.xai.enabled = false
-   | (if $acpxDisabled then .plugins.entries.acpx.enabled = false else . end)
+   | del(.plugins.entries.acpx)
    | (if $browserDisabled then
         .plugins.entries.browser.enabled = false | .browser.enabled = false
       else . end)' <<<"$CONFIG_JSON")
@@ -649,8 +655,29 @@ fi
 if [ -n "${CLOUDFLARE_PROXY_URL:-}" ]; then
   echo "Proxy     : ${CLOUDFLARE_PROXY_URL}"
 fi
+RUNTIME_JUPYTER_ENABLED="$DEV_MODE_ENABLED"
+if [ "$DEV_MODE_ENABLED" = "true" ] && ! command -v jupyter-lab >/dev/null 2>&1; then
+  echo "DEV_MODE enabled but jupyter-lab is missing; attempting runtime install..."
+  if python3 -m pip install --user --no-cache-dir --break-system-packages jupyterlab==4.5.7 tornado==6.5.5 ipywidgets==8.1.8; then
+    echo "Runtime Jupyter install complete."
+  else
+    echo "WARNING: Runtime Jupyter install failed; disabling terminal for this boot."
+    RUNTIME_JUPYTER_ENABLED=false
+  fi
+fi
+if [ "$RUNTIME_JUPYTER_ENABLED" = "true" ] && ! command -v jupyter-lab >/dev/null 2>&1; then
+  echo "WARNING: jupyter-lab still unavailable; disabling terminal for this boot."
+  RUNTIME_JUPYTER_ENABLED=false
+fi
+export HUGGINGCLAW_JUPYTER_ENABLED="$RUNTIME_JUPYTER_ENABLED"
+
 if [ -n "${SPACE_HOST:-}" ]; then
-  echo "Control UI: https://${SPACE_HOST}/app"
+  if [ "$RUNTIME_JUPYTER_ENABLED" = "true" ]; then
+    echo "Routes    : /app/ (Control UI), /terminal/ (JupyterLab)"
+  else
+    echo "Routes    : /app/ (Control UI)"
+  fi
+  echo "Private   : open the Hugging Face App tab first; raw https://${SPACE_HOST}/... links can show HF 404 without the embedded Space session."
 fi
 echo ""
 
@@ -709,6 +736,47 @@ export LLM_MODEL="$LLM_MODEL"
 node /home/node/app/health-server.js &
 HEALTH_PID=$!
 
+# 10.5. Start JupyterLab Terminal on internal port 8888 (DEV_MODE only)
+# Accessible via /terminal/ path through the health-server proxy
+if [ "$RUNTIME_JUPYTER_ENABLED" = "true" ]; then
+  JUPYTER_TOKEN="${JUPYTER_TOKEN:-huggingface}"
+  JUPYTER_ROOT_DIR="${JUPYTER_ROOT_DIR:-/home/node}"
+  mkdir -p "$JUPYTER_ROOT_DIR"
+  if [ "$JUPYTER_ROOT_DIR" != "/home/node/app" ]; then
+    if [ -L "$JUPYTER_ROOT_DIR/HuggingClaw" ] || [ ! -e "$JUPYTER_ROOT_DIR/HuggingClaw" ]; then
+      ln -sfn /home/node/app "$JUPYTER_ROOT_DIR/HuggingClaw"
+    fi
+  fi
+  if [ "$JUPYTER_ROOT_DIR" != "/home/node/.openclaw/workspace" ]; then
+    if [ -L "$JUPYTER_ROOT_DIR/HuggingClaw-Workspace" ] || [ ! -e "$JUPYTER_ROOT_DIR/HuggingClaw-Workspace" ]; then
+      ln -sfn /home/node/.openclaw/workspace "$JUPYTER_ROOT_DIR/HuggingClaw-Workspace"
+    fi
+  fi
+
+  echo "DEV_MODE enabled (${DEV_MODE_RAW}) — starting JupyterLab terminal on internal port 8888 (path: /terminal/) with root: $JUPYTER_ROOT_DIR"
+  jupyter-lab \
+      --ip 127.0.0.1 \
+      --port 8888 \
+      --no-browser \
+      --IdentityProvider.token="$JUPYTER_TOKEN" \
+      --ServerApp.base_url=/terminal/ \
+      --ServerApp.terminals_enabled=True \
+      --ServerApp.allow_origin='*' \
+      --ServerApp.allow_remote_access=True \
+      --ServerApp.trust_xheaders=True \
+      --ServerApp.tornado_settings="{'headers': {'Content-Security-Policy': 'frame-ancestors *'}}" \
+      --IdentityProvider.cookie_options="{'SameSite': 'None', 'Secure': True}" \
+      --ServerApp.disable_check_xsrf=True \
+      --LabApp.news_url=None \
+      --LabApp.check_for_updates_class="jupyterlab.NeverCheckForUpdate" \
+      --notebook-dir="$JUPYTER_ROOT_DIR" \
+      2>&1 | tee -a /tmp/jupyterlab.log &
+  JUPYTER_PID=$!
+  echo "JupyterLab started (PID: $JUPYTER_PID)"
+else
+  echo "Jupyter terminal disabled for this boot (DEV_MODE=${DEV_MODE_RAW})."
+fi
+
 if [ -n "${CLOUDFLARE_WORKERS_TOKEN:-}" ]; then
   echo "Setting up Cloudflare KeepAlive monitor..."
   python3 /home/node/app/cloudflare-keepalive-setup.py || true
@@ -730,6 +798,9 @@ export PYTHONUSERBASE="${PYTHONUSERBASE:-/home/node/.local}"
 export DEBIAN_FRONTEND="${DEBIAN_FRONTEND:-noninteractive}"
 STARTUP_FILE="/home/node/.openclaw/workspace/startup.sh"
 _hc_append() {
+  if [ "${HUGGINGCLAW_CAPTURE_DISABLE:-0}" = "1" ]; then
+    return 0
+  fi
   local line="$*"
   mkdir -p "$(dirname "$STARTUP_FILE")"
   touch "$STARTUP_FILE"
@@ -755,6 +826,28 @@ _hc_append_cmd() {
   else
     _hc_append "$cmd"
   fi
+}
+_hc_args_without_flags() {
+  local out=()
+  local arg
+  for arg in "$@"; do
+    case "$arg" in
+      ''|-) ;;
+      --*) ;;
+      -*) ;;
+      *) out+=("$arg") ;;
+    esac
+  done
+  printf '%s\n' "${out[@]}"
+}
+_hc_has_install_targets() {
+  local item
+  while IFS= read -r item; do
+    [ -n "$item" ] && return 0
+  done <<EOF
+$(_hc_args_without_flags "$@")
+EOF
+  return 1
 }
 _hc_allow_openclaw_plugins() {
   local config="/home/node/.openclaw/openclaw.json"
@@ -807,7 +900,7 @@ apt-get() {
       _hc_apt_install "$@"
       local rc=$?
       if [ $rc -eq 0 ]; then
-        _hc_append_cmd "sudo apt-get update && sudo apt-get install -y" "$@"
+        _hc_has_install_targets "$@" && _hc_append_cmd "sudo apt-get update && sudo apt-get install -y" "$@"
       fi
       return $rc
       ;;
@@ -834,7 +927,7 @@ apt() {
       _hc_apt_install "$@"
       local rc=$?
       if [ $rc -eq 0 ]; then
-        _hc_append_cmd "sudo apt-get update && sudo apt-get install -y" "$@"
+        _hc_has_install_targets "$@" && _hc_append_cmd "sudo apt-get update && sudo apt-get install -y" "$@"
       fi
       return $rc
       ;;
@@ -861,7 +954,7 @@ pip() {
     command pip "$@"
   fi
   local rc=$?
-  if [ $rc -eq 0 ] && [ "${1:-}" = "install" ]; then
+  if [ $rc -eq 0 ] && [ "${1:-}" = "install" ] && _hc_has_install_targets "${@:2}"; then
     _hc_append_cmd "python3 -m pip install --user" "${@:2}"
   fi
   return $rc
@@ -873,15 +966,39 @@ pip3() {
     command pip3 "$@"
   fi
   local rc=$?
-  if [ $rc -eq 0 ] && [ "${1:-}" = "install" ]; then
+  if [ $rc -eq 0 ] && [ "${1:-}" = "install" ] && _hc_has_install_targets "${@:2}"; then
     _hc_append_cmd "python3 -m pip install --user" "${@:2}"
+  fi
+  return $rc
+}
+python() {
+  if [ "${1:-}" = "-m" ] && [ "${2:-}" = "pip" ] && [ "${3:-}" = "install" ] && [ -z "${VIRTUAL_ENV:-}" ] && ! _hc_has_arg --user "${@:3}" && ! _hc_has_arg --prefix "${@:3}"; then
+    command python -m pip install --user "${@:4}"
+  else
+    command python "$@"
+  fi
+  local rc=$?
+  if [ $rc -eq 0 ] && [ "${1:-}" = "-m" ] && [ "${2:-}" = "pip" ] && [ "${3:-}" = "install" ] && _hc_has_install_targets "${@:4}"; then
+    _hc_append_cmd "python3 -m pip install --user" "${@:4}"
+  fi
+  return $rc
+}
+python3() {
+  if [ "${1:-}" = "-m" ] && [ "${2:-}" = "pip" ] && [ "${3:-}" = "install" ] && [ -z "${VIRTUAL_ENV:-}" ] && ! _hc_has_arg --user "${@:3}" && ! _hc_has_arg --prefix "${@:3}"; then
+    command python3 -m pip install --user "${@:4}"
+  else
+    command python3 "$@"
+  fi
+  local rc=$?
+  if [ $rc -eq 0 ] && [ "${1:-}" = "-m" ] && [ "${2:-}" = "pip" ] && [ "${3:-}" = "install" ] && _hc_has_install_targets "${@:4}"; then
+    _hc_append_cmd "python3 -m pip install --user" "${@:4}"
   fi
   return $rc
 }
 npm() {
   command npm "$@"
   local rc=$?
-  if [ $rc -eq 0 ] && [ "${1:-}" = "install" ] && { [ "${2:-}" = "-g" ] || [ "${2:-}" = "--global" ]; }; then
+  if [ $rc -eq 0 ] && { [ "${1:-}" = "install" ] || [ "${1:-}" = "i" ]; } && { [ "${2:-}" = "-g" ] || [ "${2:-}" = "--global" ]; } && _hc_has_install_targets "${@:3}"; then
     _hc_append_cmd "npm install -g" "${@:3}"
   fi
   return $rc
@@ -889,7 +1006,7 @@ npm() {
 openclaw() {
   command openclaw "$@"
   local rc=$?
-  if [ $rc -eq 0 ] && [ "${1:-}" = "plugins" ] && [ "${2:-}" = "install" ]; then
+  if [ $rc -eq 0 ] && [ "${1:-}" = "plugins" ] && [ "${2:-}" = "install" ] && _hc_has_install_targets "${@:3}"; then
     _hc_allow_openclaw_plugins "${@:3}"
     _hc_append_cmd "openclaw plugins install" "${@:3}"
   fi
@@ -935,7 +1052,7 @@ hc_run_startup_command() {
 
   echo "[startup:${source_label}] $command_text"
   set +e
-  bash -lc "$command_text"
+  HUGGINGCLAW_CAPTURE_DISABLE=1 bash -lc "$command_text"
   local rc=$?
   set -e
   if [ "$rc" -eq 0 ]; then
@@ -959,6 +1076,7 @@ hc_run_startup_script() {
     # Load HuggingClaw's install wrappers for env-provided scripts too, so
     # `apt install`, `pip install`, `npm install -g`, and OpenClaw plugin
     # installs behave the same way as they do in the interactive shell.
+    echo 'export HUGGINGCLAW_CAPTURE_DISABLE=1'
     echo '[ -f /home/node/.bashrc ] && . /home/node/.bashrc'
     printf '%s\n' "$script_text"
   } > "$script_file"

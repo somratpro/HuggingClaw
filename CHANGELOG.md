@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.6.0] - 2026-05-14
+
+### Added
+
+- **Merged JupyterLab terminal** — added the Hugging Face JupyterLab template login page and `/terminal/` routing alongside the HuggingClaw dashboard and `/app/` OpenClaw Control UI.
+- **HF template parity files** — restored Git LFS defaults and project metadata/docs that were missing from the merged repository.
+
+### Fixed
+
+- **HF Spaces subpath routing** — normalized internal redirects and WebSocket forwarding so `/app/` and `/terminal/` stay mounted behind the single public Spaces port.
+- **Startup log noise** — removed the stale disabled `plugins.entries.acpx` config entry, switched Jupyter token/cookie options to `IdentityProvider.*`, and printed `/app/` with the trailing slash.
+- **Private Space navigation** — dashboard buttons now stay in-frame and startup logs print relative routes, avoiding raw `.hf.space` links that can show Hugging Face's outer 404 page on private Spaces.
+
 ## [1.5.0] - 2026-05-13
 
 ### Added

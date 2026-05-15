@@ -1,21 +1,20 @@
-# personal workflows
-.github/workflows/
-.git*
 # env/secrets
 .env
 .env.*
+!.env.example
 *.pem
 *.key
 
 # node
 node_modules/
+gui/node_modules/
 npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
 
 # python
 __pycache__/
-*.pyc
+*.py[cod]
 .venv/
 venv/
 
@@ -33,12 +32,10 @@ build/
 .cache/
 
 # temp
+.tmp/
 tmp/
 temp/
 
 # os junk
 .DS_Store
 Thumbs.db
-
-# gitignore itself
-.gitignore

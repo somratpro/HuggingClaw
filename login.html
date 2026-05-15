@@ -1,0 +1,59 @@
+{% extends "page.html" %}
+
+{% block stylesheet %}
+{% endblock %}
+
+{% block site %}
+<div id="jupyter-main-app" class="container" style="text-align:center; max-width: 760px; margin-top: 40px;">
+  <img src="https://huggingface.co/front/assets/huggingface_logo-noborder.svg" alt="Hugging Face Logo" style="max-width: 120px; margin-bottom: 24px;">
+  <h3>HuggingClaw Terminal</h3>
+  <h4>Welcome to JupyterLab</h4>
+  <h5>The default token is <span style="color:orange;">huggingface</span></h5>
+  <p style="color:#666;">This terminal is mounted at <code>/terminal/</code> inside the same Hugging Face Space as the OpenClaw UI.</p>
+
+  {% if login_available %}
+  <div class="row" style="display:flex; justify-content:center; margin-top:24px;">
+    <div class="navbar col-sm-8">
+      <div class="navbar-inner">
+        <div class="container">
+          <div class="center-nav">
+            <form action="{{base_url}}login?next={{next}}" method="post" class="navbar-form pull-left">
+              {{ xsrf_form_html() | safe }}
+              {% if token_available %}
+              <label for="password_input"><strong>{% trans %}Jupyter token <span title="This is the secret you set up when deploying your JupyterLab terminal">ⓘ</span> {% endtrans %}</strong></label>
+              {% else %}
+              <label for="password_input"><strong>{% trans %}Jupyter password:{% endtrans %}</strong></label>
+              {% endif %}
+              <input type="password" name="password" id="password_input" class="form-control">
+              <button type="submit" class="btn btn-default" id="login_submit">{% trans %}Log in{% endtrans %}</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <p>{% trans %}No login available, you shouldn't be seeing this page.{% endtrans %}</p>
+  {% endif %}
+
+  <h5 style="margin-top:28px;"><a href="/dashboard">Back to HuggingClaw dashboard</a></h5>
+  <p>This login page is based on the Hugging Face JupyterLab Space template.</p>
+
+  {% if message %}
+  <div class="row">
+    {% for key in message %}
+    <div class="message {{key}}">
+      {{message[key]}}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% if token_available %}
+  {% block token_message %}
+  {% endblock token_message %}
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block script %}
+{% endblock %}

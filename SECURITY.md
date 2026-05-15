@@ -16,6 +16,7 @@ When deploying HuggingClaw:
 
 - **Set your Space to Private** — prevents unauthorized access to your gateway
 - **Use a strong `GATEWAY_TOKEN`** — generate with `openssl rand -hex 32`
+- **Set a strong `JUPYTER_TOKEN`** — the `/terminal/` JupyterLab login defaults to `huggingface` only for template convenience
 - **Keep your HF token scoped** — use fine-grained tokens with minimum permissions
 - **Don't commit `.env` files** — the `.gitignore` already excludes them
 - **Use `TELEGRAM_ALLOWED_USERS`** — restricts bot access to your account only

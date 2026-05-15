@@ -17,7 +17,7 @@ Thanks for your interest in contributing! 🦞
 1. Fork the repo
 2. Create a feature branch: `git checkout -b feature/my-feature`
 3. Make your changes
-4. Test locally with Docker: `docker build -t huggingclaw . && docker run -p 7860:7860 --env-file .env huggingclaw`
+4. Test locally with Docker: `docker build -t huggingclaw . && docker run -p 7861:7861 --env-file .env huggingclaw`
 5. Commit with a clear message
 6. Push and open a PR
 
@@ -27,6 +27,7 @@ Thanks for your interest in contributing! 🦞
 - No unnecessary dependencies
 
 ### Testing
+- If touching routing or Docker startup, verify both `/app/` (OpenClaw UI) and `/terminal/` (JupyterLab terminal).
 - Test with at least one LLM provider (Anthropic, OpenAI, or Google)
 - Test with and without Telegram enabled
 - Test with and without workspace backup enabled
@@ -38,7 +39,7 @@ Thanks for your interest in contributing! 🦞
 cp .env.example .env
 # Fill in your values
 docker build -t huggingclaw .
-docker run -p 7860:7860 --env-file .env huggingclaw
+docker run -p 7861:7861 --env-file .env huggingclaw
 ```
 
 ## Questions?
