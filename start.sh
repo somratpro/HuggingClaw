@@ -8,6 +8,19 @@ umask 0077
 # ════════════════════════════════════════════════════════════════
 
 # ── Startup Banner ──
+trim_var() {
+  # Trim leading/trailing whitespace from a value.
+  printf '%s' "$1" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+}
+
+# Normalize core env values so accidental surrounding spaces in HF Variables
+# do not block updates or cause stale comparisons/merges.
+LLM_MODEL="$(trim_var "${LLM_MODEL:-}")"
+GATEWAY_TOKEN="$(trim_var "${GATEWAY_TOKEN:-}")"
+SPACE_HOST="$(trim_var "${SPACE_HOST:-}")"
+OPENCLAW_PASSWORD="$(trim_var "${OPENCLAW_PASSWORD:-}")"
+LLM_API_KEY="$(trim_var "${LLM_API_KEY:-}")"
+
 OPENCLAW_VERSION="${OPENCLAW_VERSION:-latest}"
 OPENCLAW_APP_DIR="/home/node/.openclaw/openclaw-app"
 OPENCLAW_RUNTIME_VERSION=""
@@ -605,7 +618,7 @@ if [ -f "$EXISTING_CONFIG" ]; then
      | .channels = ((.channels // {}) * ($desired.channels // {}))
      | .plugins.allow = (((.plugins.allow // []) + ($desired.plugins.allow // [])) | unique)
      | .plugins.deny = (((.plugins.deny // []) + ($desired.plugins.deny // [])) | unique)
-     | .plugins.entries = (($desired.plugins.entries // {}) * (.plugins.entries // {}))
+     | .plugins.entries = ((.plugins.entries // {}) * ($desired.plugins.entries // {}))
      | if $whatsappEnabled then
          ($desired.channels.whatsapp // {"dmPolicy": "pairing"}) as $desiredWhatsapp
          | .plugins.entries.whatsapp.enabled = true
