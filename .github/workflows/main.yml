@@ -28,7 +28,7 @@ jobs:
         run: |
           rm -rf /tmp/hf-space
 
-          git clone "https://oauth2:${HF_TOKEN}@huggingface.co/spaces/anuragwank23/space" /tmp/hf-space
+          git clone "https://oauth2:${HF_TOKEN}@huggingface.co/spaces/anuragwank23/HuggingClaw" /tmp/hf-space
 
       - name: Sync GitHub Repo to HF Space
         run: |
@@ -57,4 +57,4 @@ jobs:
 
           git commit -m "sync: update from github repo"
 
-          git push "https://oauth2:${HF_TOKEN}@huggingface.co/spaces/anuragwank23/space" main
+          git push "https://oauth2:${HF_TOKEN}@huggingface.co/spaces/anuragwank23/HuggingClaw" main
