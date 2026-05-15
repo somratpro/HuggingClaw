@@ -19,6 +19,8 @@ const { randomUUID } = require('node:crypto');
 
 const GATEWAY_URL = "ws://127.0.0.1:7860";
 const GATEWAY_TOKEN = process.env.GATEWAY_TOKEN || "huggingclaw";
+const WS_MIN_PROTOCOL = Number.parseInt(process.env.WS_MIN_PROTOCOL || "1", 10);
+const WS_MAX_PROTOCOL = Number.parseInt(process.env.WS_MAX_PROTOCOL || "5", 10);
 const WHATSAPP_ENABLED = /^true$/i.test(process.env.WHATSAPP_ENABLED || "");
 const CHECK_INTERVAL = 5000;
 const WAIT_TIMEOUT = 120000;
@@ -90,8 +92,8 @@ async function createConnection() {
           id: randomUUID(),
           method: "connect",
           params: {
-            minProtocol: 3,
-            maxProtocol: 3,
+            minProtocol: Number.isFinite(WS_MIN_PROTOCOL) ? WS_MIN_PROTOCOL : 1,
+            maxProtocol: Number.isFinite(WS_MAX_PROTOCOL) ? WS_MAX_PROTOCOL : 5,
             client: {
               id: "gateway-client",
               version: "1.0.0",

@@ -483,7 +483,10 @@ def _sync_once_unlocked(
                 commit_message=f"HuggingClaw sync {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}",
                 ignore_patterns=[".git/*", ".git"],
             )
-        prune_remote_deleted_files(repo_id, snapshot_dir)
+        try:
+            prune_remote_deleted_files(repo_id, snapshot_dir)
+        except Exception as prune_exc:
+            print(f"Warning: could not prune stale remote files: {prune_exc}")
     finally:
         shutil.rmtree(snapshot_dir, ignore_errors=True)
 

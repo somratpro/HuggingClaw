@@ -8,6 +8,19 @@ umask 0077
 # ════════════════════════════════════════════════════════════════
 
 # ── Startup Banner ──
+trim_var() {
+  # Trim leading/trailing whitespace from a value.
+  printf '%s' "$1" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+}
+
+# Normalize core env values so accidental surrounding spaces in HF Variables
+# do not block updates or cause stale comparisons/merges.
+LLM_MODEL="$(trim_var "${LLM_MODEL:-}")"
+GATEWAY_TOKEN="$(trim_var "${GATEWAY_TOKEN:-}")"
+SPACE_HOST="$(trim_var "${SPACE_HOST:-}")"
+OPENCLAW_PASSWORD="$(trim_var "${OPENCLAW_PASSWORD:-}")"
+LLM_API_KEY="$(trim_var "${LLM_API_KEY:-}")"
+
 OPENCLAW_VERSION="${OPENCLAW_VERSION:-latest}"
 OPENCLAW_APP_DIR="/home/node/.openclaw/openclaw-app"
 OPENCLAW_RUNTIME_VERSION=""
@@ -207,6 +220,11 @@ export NPM_CONFIG_PREFIX="${NPM_CONFIG_PREFIX:-/home/node/.local}"
 export npm_config_prefix="$NPM_CONFIG_PREFIX"
 export PYTHONUSERBASE="${PYTHONUSERBASE:-/home/node/.local}"
 export DEBIAN_FRONTEND="${DEBIAN_FRONTEND:-noninteractive}"
+# Show current working directory in terminal prompt (JupyterLab terminals can
+# otherwise display only "$" when PS1 is unset/minimal).
+if [ -z "${PS1:-}" ] || [ "$PS1" = "$ " ]; then
+  export PS1='\u@\h:\w\$ '
+fi
 STARTUP_FILE="/home/node/.openclaw/workspace/startup.sh"
 
 # ── Restore workspace/state from HF Dataset ──
@@ -600,7 +618,7 @@ if [ -f "$EXISTING_CONFIG" ]; then
      | .channels = ((.channels // {}) * ($desired.channels // {}))
      | .plugins.allow = (((.plugins.allow // []) + ($desired.plugins.allow // [])) | unique)
      | .plugins.deny = (((.plugins.deny // []) + ($desired.plugins.deny // [])) | unique)
-     | .plugins.entries = (($desired.plugins.entries // {}) * (.plugins.entries // {}))
+     | .plugins.entries = ((.plugins.entries // {}) * ($desired.plugins.entries // {}))
      | if $whatsappEnabled then
          ($desired.channels.whatsapp // {"dmPolicy": "pairing"}) as $desiredWhatsapp
          | .plugins.entries.whatsapp.enabled = true
@@ -1014,7 +1032,7 @@ openclaw() {
 }
 BASHRC
 cat > /home/node/.profile <<'PROFILE'
-[ -f ~/.bashrc ] && . ~/.bashrc
+[ -n "${BASH_VERSION:-}" ] && [ -f ~/.bashrc ] && . ~/.bashrc
 PROFILE
 echo "Shell capture wrappers ready."
 

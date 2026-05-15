@@ -63,7 +63,7 @@ function probePort(host, port, path, timeoutMs = 1500) {
   return new Promise((resolve) => {
     const req = http.get({ hostname: host, port, path, timeout: timeoutMs }, (res) => {
       res.resume();
-      resolve(res.statusCode >= 200 && res.statusCode < 500);
+      resolve(res.statusCode >= 200 && res.statusCode < 400);
     });
     req.on("timeout", () => { req.destroy(); resolve(false); });
     req.on("error", () => resolve(false));
@@ -149,13 +149,27 @@ function renderDashboard(data) {
   </style></head><body><main>
   <header><h1>🦞 HuggingClaw</h1><div class="subtitle">OpenClaw Gateway</div></header>
   <div class="btn-row">
-    <a class="hero-action" href="${APP_BASE}/">Open Control UI →</a>
-    ${JUPYTER_ENABLED ? `<a class="hero-action terminal" href="${JUPYTER_BASE}/">💻 Open Terminal →</a>` : ""}
+    <a class="hero-action" data-space-link="app" href="${APP_BASE}/">Open Control UI →</a>
+    ${JUPYTER_ENABLED ? `<a class="hero-action terminal" data-space-link="terminal" href="${JUPYTER_BASE}/">💻 Open Terminal →</a>` : ""}
   </div>
   <section class="overview">${tilesHtml}</section>
   <footer>Built by <a href="https://github.com/somratpro" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none">@somratpro</a>${JUPYTER_ENABLED ? " · Terminal by JupyterLab" : ""}<br><span>Public Spaces can be opened directly via <code>.hf.space</code>; private Spaces require the App tab session.</span></footer>
   </main>
-  <script>document.querySelectorAll('.local-time').forEach(el=>{const d=new Date(el.getAttribute('data-iso'));if(!isNaN(d))el.textContent='At '+d.toLocaleTimeString()});</script>
+  <script>
+  document.querySelectorAll('.local-time').forEach(el=>{const d=new Date(el.getAttribute('data-iso'));if(!isNaN(d))el.textContent='At '+d.toLocaleTimeString()});
+  const inEmbeddedApp = (() => { try { return window.top !== window.self; } catch { return true; } })();
+  const isDirectHfSpaceHost = /\.hf\.space$/i.test(window.location.hostname);
+  const openInNewTab = !inEmbeddedApp && isDirectHfSpaceHost;
+  document.querySelectorAll('a[data-space-link]').forEach((a) => {
+    if (openInNewTab) {
+      a.setAttribute('target', '_blank');
+      a.setAttribute('rel', 'noopener noreferrer');
+    } else {
+      a.removeAttribute('target');
+      a.removeAttribute('rel');
+    }
+  });
+</script>
 </body></html>`;
 }
 
