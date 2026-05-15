@@ -182,7 +182,9 @@ function renderDashboard(data) {
   document.querySelectorAll('.local-time').forEach(el=>{const d=new Date(el.getAttribute('data-iso'));if(!isNaN(d))el.textContent='At '+d.toLocaleTimeString()});
   const inEmbeddedApp = (() => { try { return window.top !== window.self; } catch { return true; } })();
   const isDirectHfSpaceHost = /\.hf\.space$/i.test(window.location.hostname);
-  const openInNewTab = !inEmbeddedApp && isDirectHfSpaceHost;
+  // If inside the HF App iframe, force new-tab navigation so users can break out
+  // to the standalone Space host. Also keep direct .hf.space behavior opening new tabs.
+  const openInNewTab = inEmbeddedApp || isDirectHfSpaceHost;
   document.querySelectorAll('a[data-space-link]').forEach((a) => {
     if (openInNewTab) {
       a.setAttribute('target', '_blank');

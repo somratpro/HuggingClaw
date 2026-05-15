@@ -839,6 +839,7 @@ if [ "$RUNTIME_JUPYTER_ENABLED" = "true" ]; then
     JUPYTER_ROOT_DIR="/home/node/devdata"
   fi
   mkdir -p "$JUPYTER_ROOT_DIR"
+  export JUPYTER_ROOT_DIR
   if [ "$JUPYTER_ROOT_DIR" != "/home/node/app" ]; then
     if [ -L "$JUPYTER_ROOT_DIR/HuggingClaw" ] || [ ! -e "$JUPYTER_ROOT_DIR/HuggingClaw" ]; then
       ln -sfn /home/node/app "$JUPYTER_ROOT_DIR/HuggingClaw"

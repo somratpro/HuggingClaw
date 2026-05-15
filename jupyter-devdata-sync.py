@@ -15,6 +15,17 @@ def is_true(value):
 
 ENABLE = is_true(os.environ.get("DEVDATA", "on"))
 
+
+def classify_error(exc: Exception) -> str:
+    msg = str(exc).lower()
+    if isinstance(exc, PermissionError) or "permission denied" in msg:
+        return "filesystem-permission"
+    if any(k in msg for k in ("connection error", "fetch failed", "timeout", "temporarily unavailable", "network")):
+        return "network-provider"
+    if "unsafe" in msg or "malware" in msg or "security" in msg:
+        return "safety-scan"
+    return "general"
+
 EXCLUDE = {
     ".cache",
     "node_modules",
@@ -26,7 +37,9 @@ EXCLUDE = {
     "app",
     "HuggingClaw",
     "HuggingClaw-Workspace",
+    "browser-deps",
 }
+
 
 def enabled():
     dev = is_true(os.environ.get("DEV_MODE", ""))
@@ -78,10 +91,17 @@ def restore_once(api: HfApi, rid: str):
                 target.mkdir(parents=True, exist_ok=True)
             elif p.is_file():
                 target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(p, target)
+                try:
+                    shutil.copy2(p, target)
+                except OSError as exc:
+                    kind = classify_error(exc)
+                    print(f"DevData restore skip [{kind}] (cannot write {target}): {exc}")
         print(f"DevData restored from {rid}")
     except RepositoryNotFoundError:
         print(f"DevData dataset not found yet: {rid}")
+    except Exception as exc:
+        kind = classify_error(exc)
+        print(f"DevData restore warning [{kind}]: {exc}")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -95,7 +115,8 @@ def sync_loop(api: HfApi, rid: str):
                           ignore_patterns=[".git/*", ".git"])
             print(f"DevData synced to {rid}")
         except Exception as exc:
-            print(f"DevData sync warning: {exc}")
+            kind = classify_error(exc)
+            print(f"DevData sync warning [{kind}]: {exc}")
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
         time.sleep(INTERVAL)
