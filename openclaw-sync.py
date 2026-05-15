@@ -53,8 +53,11 @@ CONFIG_SETTLE_SECONDS = max(
 HF_TOKEN = os.environ.get("HF_TOKEN", "").strip()
 HF_USERNAME = os.environ.get("HF_USERNAME", "").strip()
 SPACE_AUTHOR_NAME = os.environ.get("SPACE_AUTHOR_NAME", "").strip()
-BACKUP_DATASET_NAME = os.environ.get("BACKUP_DATASET_NAME", "huggingclaw-backup").strip()
-WHATSAPP_ENABLED = os.environ.get("WHATSAPP_ENABLED", "").strip().lower() == "true"
+BACKUP_DATASET_NAME = os.environ.get("BACKUP_DATASET_NAME", "").strip() or os.environ.get("BACKUP_DATASET", "").strip() or "huggingclaw-backup"
+def is_true(value):
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+WHATSAPP_ENABLED = is_true(os.environ.get("WHATSAPP_ENABLED", ""))
 
 EXCLUDED_SYNC_DIRS = {
     "node_modules", ".git", "__pycache__", ".venv", "venv",
