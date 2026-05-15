@@ -13,6 +13,41 @@ trim_var() {
   printf '%s' "$1" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
 }
 
+load_env_bundle() {
+  # HUGGINGCLAW_ENV_BUNDLE is a single base64url-encoded JSON object generated
+  # by /env-builder. Existing individual env vars win over bundled values.
+  local bundle="${HUGGINGCLAW_ENV_BUNDLE:-${ENV_BUNDLE:-}}"
+  [ -n "$bundle" ] || return 0
+  eval "$(HUGGINGCLAW_ENV_BUNDLE="$bundle" python3 - <<'PYBUNDLE'
+import base64, json, os, re, shlex, sys
+
+raw = os.environ.get("HUGGINGCLAW_ENV_BUNDLE", "").strip()
+try:
+    if raw.startswith("{"):
+        data = json.loads(raw)
+    else:
+        padded = raw + "=" * (-len(raw) % 4)
+        data = json.loads(base64.urlsafe_b64decode(padded.encode()).decode())
+    if not isinstance(data, dict):
+        raise ValueError("bundle must decode to a JSON object")
+    for key, value in data.items():
+        if not re.fullmatch(r"[A-Z_][A-Z0-9_]*", str(key)):
+            continue
+        if str(key) in {"HUGGINGCLAW_ENV_BUNDLE", "ENV_BUNDLE"}:
+            continue
+        if os.environ.get(str(key), ""):
+            continue
+        if value is None or isinstance(value, (dict, list)):
+            continue
+        print(f"export {key}={shlex.quote(str(value))}")
+except Exception as exc:
+    print(f"Warning: invalid HUGGINGCLAW_ENV_BUNDLE ignored: {exc}", file=sys.stderr)
+PYBUNDLE
+)"
+}
+
+load_env_bundle
+
 # Normalize core env values so accidental surrounding spaces in HF Variables
 # do not block updates or cause stale comparisons/merges.
 LLM_MODEL="$(trim_var "${LLM_MODEL:-}")"

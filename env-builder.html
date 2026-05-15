@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HuggingClaw Env Builder</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #070711;
+      --panel: rgba(18, 17, 30, .92);
+      --panel2: rgba(26, 24, 43, .9);
+      --line: #302d49;
+      --text: #f7f4ff;
+      --muted: #9790b9;
+      --soft: #cfc8ef;
+      --accent: #8b5cf6;
+      --accent2: #06b6d4;
+      --good: #22c55e;
+      --warn: #f59e0b;
+      --bad: #fb7185;
+      --shadow: 0 22px 70px rgba(0, 0, 0, .42);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at 10% -10%, rgba(139, 92, 246, .22), transparent 32rem),
+        radial-gradient(circle at 90% 0%, rgba(6, 182, 212, .15), transparent 28rem),
+        var(--bg);
+      color: var(--text);
+      font-size: 14px;
+    }
+    a { color: inherit; }
+    code { background: rgba(255,255,255,.07); border: 1px solid var(--line); border-radius: 7px; padding: 2px 6px; }
+    main { width: min(1180px, calc(100% - 28px)); margin: 0 auto; padding: 28px 0 46px; }
+    .hero { display: grid; grid-template-columns: 1fr auto; gap: 18px; align-items: start; margin-bottom: 16px; }
+    .pill { display: inline-flex; align-items: center; gap: 8px; border: 1px solid rgba(139,92,246,.45); background: rgba(139,92,246,.14); color: #ddd6fe; border-radius: 999px; padding: 5px 10px; font-size: .72rem; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+    h1 { margin: 10px 0 8px; font-size: clamp(1.7rem, 3.6vw, 3rem); line-height: .95; letter-spacing: -.04em; }
+    .lead { margin: 0; max-width: 820px; color: var(--soft); line-height: 1.6; }
+    .back { text-decoration: none; border: 1px solid var(--line); border-radius: 999px; padding: 10px 14px; color: var(--soft); background: rgba(255,255,255,.04); }
+    .toolbar { display: grid; grid-template-columns: 1fr auto auto auto; gap: 10px; margin: 18px 0; position: sticky; top: 0; z-index: 5; padding: 10px; background: rgba(7,7,17,.82); backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,.07); border-radius: 16px; }
+    input, textarea, select { width: 100%; border: 1px solid var(--line); background: #0b0a15; color: var(--text); border-radius: 11px; padding: 11px 12px; font: inherit; outline: none; }
+    input:focus, textarea:focus, select:focus { border-color: rgba(139, 92, 246, .85); box-shadow: 0 0 0 3px rgba(139, 92, 246, .14); }
+    textarea { min-height: 130px; resize: vertical; line-height: 1.45; }
+    button { border: 0; border-radius: 11px; padding: 11px 14px; font-weight: 900; cursor: pointer; white-space: nowrap; }
+    .primary { background: #fff; color: #070711; }
+    .secondary { background: #312e81; color: #eef2ff; border: 1px solid #6366f1; }
+    .ghost { background: rgba(255,255,255,.06); color: var(--soft); border: 1px solid var(--line); }
+    .layout { display: grid; grid-template-columns: 210px minmax(0, 1fr) 380px; gap: 14px; align-items: start; }
+    .panel { border: 1px solid var(--line); background: var(--panel); border-radius: 18px; padding: 14px; box-shadow: var(--shadow); }
+    .nav { position: sticky; top: 92px; }
+    .nav button { width: 100%; text-align: left; margin: 4px 0; display: flex; justify-content: space-between; align-items: center; }
+    .nav button.active { background: linear-gradient(135deg, rgba(139,92,246,.38), rgba(6,182,212,.18)); color: #fff; border-color: rgba(139,92,246,.75); }
+    .count { color: var(--muted); font-size: .78rem; }
+    .section { margin-bottom: 14px; }
+    .section h2 { margin: 0 0 4px; font-size: .78rem; letter-spacing: .18em; color: var(--muted); text-transform: uppercase; }
+    .section-desc { color: var(--muted); margin: 0 0 10px; line-height: 1.45; font-size: .9rem; }
+    .env-row { display: grid; grid-template-columns: 30px 240px 1fr; gap: 10px; align-items: start; padding: 10px; border: 1px solid rgba(255,255,255,.06); border-radius: 14px; background: rgba(255,255,255,.025); margin-top: 8px; }
+    .env-row.selected { border-color: rgba(34,197,94,.42); background: rgba(34,197,94,.045); }
+    .env-row.hidden { display: none; }
+    .check { width: 18px; height: 18px; margin-top: 11px; accent-color: var(--accent); }
+    .env-meta { min-width: 0; }
+    .key { font-weight: 950; color: var(--text); word-break: break-word; }
+    .tagline { color: var(--muted); font-size: .82rem; line-height: 1.35; margin-top: 4px; }
+    .secret { color: #f0abfc; }
+    .safe { color: #86efac; }
+    .value-wrap { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+    .value-wrap textarea { min-height: 42px; max-height: 140px; }
+    .mini { padding: 9px 10px; font-size: .8rem; }
+    .output { position: sticky; top: 92px; }
+    .output h2, .importer h2 { margin: 0 0 8px; font-size: 1rem; }
+    .hint { color: var(--muted); font-size: .86rem; line-height: 1.45; }
+    .bundle { min-height: 160px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .78rem; word-break: break-all; }
+    .envline { min-height: 72px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .78rem; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
+    .summary { border: 1px dashed rgba(255,255,255,.16); border-radius: 12px; padding: 10px; color: var(--soft); font-size: .85rem; line-height: 1.5; }
+    .importer { margin-bottom: 14px; background: var(--panel2); }
+    .custom-grid { display: grid; grid-template-columns: 1fr 1.5fr auto; gap: 8px; margin-top: 8px; }
+    .toast { position: fixed; right: 18px; bottom: 18px; background: #ecfeff; color: #083344; padding: 12px 14px; border-radius: 12px; font-weight: 900; opacity: 0; transform: translateY(8px); transition: .2s; box-shadow: var(--shadow); z-index: 10; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    @media (max-width: 1040px) { .layout { grid-template-columns: 1fr; } .nav, .output { position: static; } .nav { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 6px; } .env-row { grid-template-columns: 30px 1fr; } .value-wrap { grid-column: 2; } .toolbar { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 620px) { main { width: min(100% - 18px, 1180px); padding-top: 16px; } .hero { grid-template-columns: 1fr; } .toolbar, .custom-grid { grid-template-columns: 1fr; } .nav { grid-template-columns: 1fr; } .env-row { grid-template-columns: 26px 1fr; padding: 8px; } }
+  </style>
+</head>
+<body>
+<main>
+  <div class="hero">
+    <div>
+      <span class="pill">Standalone setup site</span>
+      <h1>⚙️ HuggingClaw Env Builder</h1>
+      <p class="lead">Paste existing env, select what you want to keep, edit values section-by-section, then copy one <code>HUGGINGCLAW_ENV_BUNDLE</code>. Individual Hugging Face Space secrets still override bundled values.</p>
+    </div>
+    <a class="back" href="/dashboard">← Dashboard</a>
+  </div>
+
+  <div class="toolbar">
+    <input id="search" placeholder="Search env name, description, group..." />
+    <button class="ghost" id="selectVisible">Select visible</button>
+    <button class="ghost" id="selectCommon">Select common</button>
+    <button class="ghost" id="clearAll">Clear</button>
+  </div>
+
+  <div class="layout">
+    <aside class="panel nav" id="groupNav"></aside>
+    <section>
+      <div class="panel importer">
+        <h2>Import existing env</h2>
+        <p class="hint">Paste normal <code>.env</code> lines, a raw JSON object, or an existing <code>HUGGINGCLAW_ENV_BUNDLE</code>. Matching fields below will be filled and selected; unknown safe uppercase keys go into Custom env.</p>
+        <textarea id="importText" placeholder="LLM_MODEL=openrouter/openai/gpt-4.1-mini&#10;TELEGRAM_BOT_TOKEN=...&#10;or paste HUGGINGCLAW_ENV_BUNDLE=..."></textarea>
+        <div class="actions">
+          <button class="primary" id="applyImport">Apply import</button>
+          <button class="secondary" id="addCustom">Add custom row</button>
+        </div>
+      </div>
+      <div id="sections"></div>
+      <div class="panel section">
+        <h2>Custom env</h2>
+        <p class="section-desc">Use this for any extra safe uppercase env not listed above.</p>
+        <div id="customRows"></div>
+      </div>
+    </section>
+    <aside class="panel output">
+      <h2>Copyable output</h2>
+      <p class="hint">The bundle text is editable. If you edit it manually, click <b>Apply edited bundle</b> to load it back into the form.</p>
+      <label class="key" for="bundleOut">HUGGINGCLAW_ENV_BUNDLE</label>
+      <textarea id="bundleOut" class="bundle" spellcheck="false"></textarea>
+      <div class="actions">
+        <button class="primary" id="copyBundle">Copy bundle</button>
+        <button class="secondary" id="applyBundle">Apply edited bundle</button>
+      </div>
+      <label class="key" for="envLineOut">.env line</label>
+      <textarea id="envLineOut" class="envline" spellcheck="false"></textarea>
+      <div class="actions">
+        <button class="secondary" id="copyEnvLine">Copy .env line</button>
+        <button class="ghost" id="copyJson">Copy JSON</button>
+      </div>
+      <div class="summary" id="summary">No settings selected yet.</div>
+    </aside>
+  </div>
+</main>
+<div class="toast" id="toast">Copied</div>
+<script>
+const FIELDS = [
+  { group: 'Core', key: 'LLM_MODEL', label: 'Default model ID', placeholder: 'openrouter/openai/gpt-4.1-mini', common: true },
+  { group: 'Core', key: 'LLM_API_KEY', label: 'Primary provider API key', secret: true, placeholder: 'sk-...', common: true },
+  { group: 'Core', key: 'GATEWAY_TOKEN', label: 'Control UI gateway token', secret: true, common: true },
+  { group: 'Core', key: 'OPENCLAW_PASSWORD', label: 'Optional simple password auth', secret: true },
+  { group: 'Core', key: 'OPENCLAW_VERSION', label: 'Pin OpenClaw release/version', placeholder: 'latest' },
+  { group: 'Core', key: 'LLM_API_KEY_FALLBACK_ENABLED', label: 'Allow global LLM_API_KEY fallback', placeholder: 'true' },
+
+  { group: 'Provider Keys', key: 'ANTHROPIC_API_KEY', label: 'Anthropic key', secret: true },
+  { group: 'Provider Keys', key: 'OPENAI_API_KEY', label: 'OpenAI key', secret: true },
+  { group: 'Provider Keys', key: 'GEMINI_API_KEY', label: 'Google Gemini key', secret: true },
+  { group: 'Provider Keys', key: 'DEEPSEEK_API_KEY', label: 'DeepSeek key', secret: true },
+  { group: 'Provider Keys', key: 'GROQ_API_KEY', label: 'Groq key', secret: true },
+  { group: 'Provider Keys', key: 'MISTRAL_API_KEY', label: 'Mistral key', secret: true },
+  { group: 'Provider Keys', key: 'XAI_API_KEY', label: 'xAI key', secret: true },
+  { group: 'Provider Keys', key: 'NVIDIA_API_KEY', label: 'NVIDIA key', secret: true },
+  { group: 'Provider Keys', key: 'COHERE_API_KEY', label: 'Cohere key', secret: true },
+  { group: 'Provider Keys', key: 'TOGETHER_API_KEY', label: 'Together key', secret: true },
+  { group: 'Provider Keys', key: 'CEREBRAS_API_KEY', label: 'Cerebras key', secret: true },
+  { group: 'Provider Keys', key: 'MOONSHOT_API_KEY', label: 'Moonshot key', secret: true },
+  { group: 'Provider Keys', key: 'OPENROUTER_API_KEY', label: 'OpenRouter key', secret: true, common: true },
+  { group: 'Provider Keys', key: 'HUGGINGFACE_HUB_TOKEN', label: 'Hugging Face inference token', secret: true },
+  { group: 'Provider Keys', key: 'GOOGLE_API_KEY', label: 'Google API key alias', secret: true },
+  { group: 'Provider Keys', key: 'KILOCODE_API_KEY', label: 'KiloCode key', secret: true },
+  { group: 'Provider Keys', key: 'OPENCODE_API_KEY', label: 'OpenCode key', secret: true },
+  { group: 'Provider Keys', key: 'AI_GATEWAY_API_KEY', label: 'Vercel AI Gateway key', secret: true },
+  { group: 'Provider Keys', key: 'ZAI_API_KEY', label: 'Z.AI / Zhipu key', secret: true },
+  { group: 'Provider Keys', key: 'KIMI_API_KEY', label: 'Kimi key', secret: true },
+  { group: 'Provider Keys', key: 'MINIMAX_API_KEY', label: 'MiniMax key', secret: true },
+  { group: 'Provider Keys', key: 'MODELSTUDIO_API_KEY', label: 'Qwen ModelStudio key', secret: true },
+  { group: 'Provider Keys', key: 'XIAOMI_API_KEY', label: 'Xiaomi key', secret: true },
+  { group: 'Provider Keys', key: 'VOLCANO_ENGINE_API_KEY', label: 'Volcengine key', secret: true },
+  { group: 'Provider Keys', key: 'BYTEPLUS_API_KEY', label: 'BytePlus key', secret: true },
+  { group: 'Provider Keys', key: 'QIANFAN_API_KEY', label: 'Qianfan key', secret: true },
+  { group: 'Provider Keys', key: 'VENICE_API_KEY', label: 'Venice key', secret: true },
+  { group: 'Provider Keys', key: 'SYNTHETIC_API_KEY', label: 'Synthetic key', secret: true },
+  { group: 'Provider Keys', key: 'COPILOT_GITHUB_TOKEN', label: 'GitHub Copilot token', secret: true },
+
+  { group: 'Rotation Pools', key: 'ANTHROPIC_API_KEYS', label: 'Anthropic key pool' },
+  { group: 'Rotation Pools', key: 'OPENAI_API_KEYS', label: 'OpenAI key pool' },
+  { group: 'Rotation Pools', key: 'GEMINI_API_KEYS', label: 'Gemini key pool' },
+  { group: 'Rotation Pools', key: 'DEEPSEEK_API_KEYS', label: 'DeepSeek key pool' },
+  { group: 'Rotation Pools', key: 'OPENROUTER_API_KEYS', label: 'OpenRouter key pool' },
+  { group: 'Rotation Pools', key: 'GROQ_API_KEYS', label: 'Groq key pool' },
+  { group: 'Rotation Pools', key: 'NVIDIA_API_KEYS', label: 'NVIDIA key pool' },
+  { group: 'Rotation Pools', key: 'MISTRAL_API_KEYS', label: 'Mistral key pool' },
+  { group: 'Rotation Pools', key: 'XAI_API_KEYS', label: 'xAI key pool' },
+  { group: 'Rotation Pools', key: 'COHERE_API_KEYS', label: 'Cohere key pool' },
+  { group: 'Rotation Pools', key: 'TOGETHER_API_KEYS', label: 'Together key pool' },
+  { group: 'Rotation Pools', key: 'CEREBRAS_API_KEYS', label: 'Cerebras key pool' },
+  { group: 'Rotation Pools', key: 'HUGGINGFACE_HUB_TOKENS', label: 'HF token pool' },
+  { group: 'Rotation Pools', key: 'KILOCODE_API_KEYS', label: 'KiloCode key pool' },
+  { group: 'Rotation Pools', key: 'OPENCODE_API_KEYS', label: 'OpenCode key pool' },
+  { group: 'Rotation Pools', key: 'ZAI_API_KEYS', label: 'Z.AI key pool' },
+  { group: 'Rotation Pools', key: 'MOONSHOT_API_KEYS', label: 'Moonshot key pool' },
+  { group: 'Rotation Pools', key: 'MINIMAX_API_KEYS', label: 'MiniMax key pool' },
+  { group: 'Rotation Pools', key: 'XIAOMI_API_KEYS', label: 'Xiaomi key pool' },
+  { group: 'Rotation Pools', key: 'VOLCANO_ENGINE_API_KEYS', label: 'Volcengine key pool' },
+  { group: 'Rotation Pools', key: 'BYTEPLUS_API_KEYS', label: 'BytePlus key pool' },
+
+  { group: 'Model Lists', key: 'NVIDIA_MODELS', label: 'Visible NVIDIA model IDs' },
+  { group: 'Model Lists', key: 'OPENAI_MODELS', label: 'Visible OpenAI model IDs' },
+  { group: 'Model Lists', key: 'GROQ_MODELS', label: 'Visible Groq model IDs' },
+  { group: 'Model Lists', key: 'ANTHROPIC_MODELS', label: 'Visible Anthropic model IDs' },
+  { group: 'Model Lists', key: 'GEMINI_MODELS', label: 'Visible Gemini model IDs' },
+  { group: 'Model Lists', key: 'OPENROUTER_MODELS', label: 'Visible OpenRouter model IDs' },
+  { group: 'Model Lists', key: 'MISTRAL_MODELS', label: 'Visible Mistral model IDs' },
+  { group: 'Model Lists', key: 'XAI_MODELS', label: 'Visible xAI model IDs' },
+
+  { group: 'Custom Provider', key: 'CUSTOM_PROVIDER_NAME', label: 'Custom provider name' },
+  { group: 'Custom Provider', key: 'CUSTOM_BASE_URL', label: 'OpenAI-compatible base URL' },
+  { group: 'Custom Provider', key: 'CUSTOM_MODEL_ID', label: 'Custom model ID' },
+  { group: 'Custom Provider', key: 'CUSTOM_MODEL_NAME', label: 'Friendly model name' },
+  { group: 'Custom Provider', key: 'CUSTOM_API_KEY', label: 'Custom provider API key', secret: true },
+  { group: 'Custom Provider', key: 'CUSTOM_API_TYPE', label: 'API type', placeholder: 'openai-completions' },
+  { group: 'Custom Provider', key: 'CUSTOM_CONTEXT_WINDOW', label: 'Context window' },
+  { group: 'Custom Provider', key: 'CUSTOM_MAX_TOKENS', label: 'Max tokens' },
+
+  { group: 'Telegram', key: 'TELEGRAM_BOT_TOKEN', label: 'Bot token from BotFather', secret: true, common: true },
+  { group: 'Telegram', key: 'TELEGRAM_ALLOWED_USERS', label: 'Allowed Telegram user IDs', placeholder: '123456789,987654321', common: true },
+
+  { group: 'WhatsApp', key: 'WHATSAPP_ENABLED', label: 'Enable WhatsApp pairing', placeholder: 'false', common: true },
+  { group: 'WhatsApp', key: 'WS_MIN_PROTOCOL', label: 'WhatsApp min protocol', placeholder: '1' },
+  { group: 'WhatsApp', key: 'WS_MAX_PROTOCOL', label: 'WhatsApp max protocol', placeholder: '5' },
+
+  { group: 'Cloudflare', key: 'CLOUDFLARE_WORKERS_TOKEN', label: 'Workers API token', secret: true, common: true },
+  { group: 'Cloudflare', key: 'CLOUDFLARE_PROXY_URL', label: 'Existing proxy URL', placeholder: 'https://your-proxy.workers.dev', common: true },
+  { group: 'Cloudflare', key: 'CLOUDFLARE_PROXY_SECRET', label: 'Existing proxy secret', secret: true },
+  { group: 'Cloudflare', key: 'CLOUDFLARE_PROXY_DOMAINS', label: 'Extra domains to proxy', placeholder: 'api.sendgrid.com,slack.com' },
+  { group: 'Cloudflare', key: 'CLOUDFLARE_ACCOUNT_ID', label: 'Cloudflare account ID' },
+  { group: 'Cloudflare', key: 'CLOUDFLARE_WORKER_NAME', label: 'Outbound proxy worker name' },
+  { group: 'Cloudflare', key: 'CLOUDFLARE_PROXY_DEBUG', label: 'Proxy debug logging', placeholder: 'false' },
+  { group: 'Cloudflare', key: 'CLOUDFLARE_KEEPALIVE_ENABLED', label: 'Enable keep-awake worker', placeholder: 'true' },
+  { group: 'Cloudflare', key: 'CLOUDFLARE_KEEPALIVE_WORKER_NAME', label: 'Keep-awake worker name' },
+  { group: 'Cloudflare', key: 'CLOUDFLARE_KEEPALIVE_CRON', label: 'Keep-awake cron', placeholder: '*/10 * * * *' },
+  { group: 'Cloudflare', key: 'CLOUDFLARE_KEEPALIVE_URL', label: 'Keep-awake target URL' },
+
+  { group: 'Backup', key: 'HF_USERNAME', label: 'HF username', common: true },
+  { group: 'Backup', key: 'HF_TOKEN', label: 'HF write token', secret: true, common: true },
+  { group: 'Backup', key: 'BACKUP_DATASET_NAME', label: 'Main backup dataset', placeholder: 'huggingclaw-backup', common: true },
+  { group: 'Backup', key: 'WORKSPACE_GIT_USER', label: 'Sync git email', placeholder: 'openclaw@example.com' },
+  { group: 'Backup', key: 'WORKSPACE_GIT_NAME', label: 'Sync git name', placeholder: 'OpenClaw Bot' },
+  { group: 'Backup', key: 'SYNC_INTERVAL', label: 'Main sync interval seconds', placeholder: '180', common: true },
+  { group: 'Backup', key: 'OPENCLAW_CONFIG_WATCH_INTERVAL', label: 'Config watch interval', placeholder: '1' },
+  { group: 'Backup', key: 'OPENCLAW_CONFIG_SETTLE_SECONDS', label: 'Config settle seconds', placeholder: '3' },
+  { group: 'Backup', key: 'SYNC_START_DELAY', label: 'Initial sync delay seconds', placeholder: '10' },
+  { group: 'Backup', key: 'SYNC_MAX_FILE_BYTES', label: 'Max single backup file bytes', placeholder: '52428800' },
+
+  { group: 'DevData / Jupyter', key: 'DEV_MODE', label: 'Enable dev mode', placeholder: 'false', common: true },
+  { group: 'DevData / Jupyter', key: 'HUGGINGCLAW_JUPYTER_ENABLED', label: 'Enable Jupyter terminal', placeholder: 'false', common: true },
+  { group: 'DevData / Jupyter', key: 'JUPYTER_TOKEN', label: 'Jupyter token', secret: true, placeholder: 'huggingface', common: true },
+  { group: 'DevData / Jupyter', key: 'DEVDATA', label: 'DevData switch', placeholder: 'on', common: true },
+  { group: 'DevData / Jupyter', key: 'DEVDATA_DATASET_NAME', label: 'Separate DevData dataset', placeholder: 'huggingclaw-devdata', common: true },
+  { group: 'DevData / Jupyter', key: 'DEVDATA_SYNC_INTERVAL', label: 'DevData sync seconds', placeholder: '180', common: true },
+  { group: 'DevData / Jupyter', key: 'JUPYTER_ROOT_DIR', label: 'Jupyter root path', placeholder: '/home/node' },
+
+  { group: 'Runtime / Security', key: 'KEEP_ALIVE_INTERVAL', label: 'Keep-awake interval seconds', placeholder: '300' },
+  { group: 'Runtime / Security', key: 'WEBHOOK_URL', label: 'Lifecycle webhook URL' },
+  { group: 'Runtime / Security', key: 'TRUSTED_PROXIES', label: 'Trusted proxy IPs' },
+  { group: 'Runtime / Security', key: 'ALLOWED_ORIGINS', label: 'Allowed Control UI origins' },
+  { group: 'Runtime / Security', key: 'HUGGINGCLAW_RUN', label: 'Startup commands' },
+  { group: 'Runtime / Security', key: 'HUGGINGCLAW_STARTUP_STRICT', label: 'Fail startup when command fails', placeholder: 'false' },
+  { group: 'Runtime / Security', key: 'HUGGINGCLAW_APT_PACKAGES', label: 'APT packages to install' },
+  { group: 'Runtime / Security', key: 'HUGGINGCLAW_PIP_PACKAGES', label: 'Pip packages to install' },
+  { group: 'Runtime / Security', key: 'HUGGINGCLAW_NPM_PACKAGES', label: 'NPM packages to install' },
+  { group: 'Runtime / Security', key: 'HUGGINGCLAW_OPENCLAW_PLUGINS', label: 'OpenClaw plugins to install' },
+  { group: 'Runtime / Security', key: 'HUGGINGCLAW_STARTUP_COMMANDS', label: 'Multiline startup commands' },
+  { group: 'Runtime / Security', key: 'HUGGINGCLAW_STARTUP_SCRIPT_B64', label: 'Base64 startup script' },
+  { group: 'Runtime / Security', key: 'OPENCLAW_FILE_LOG_LEVEL', label: 'File log level' },
+  { group: 'Runtime / Security', key: 'OPENCLAW_CONSOLE_LOG_LEVEL', label: 'Console log level' },
+  { group: 'Runtime / Security', key: 'OPENCLAW_CONSOLE_LOG_STYLE', label: 'Console log style' },
+  { group: 'Runtime / Security', key: 'BROWSER_PLUGIN_MODE', label: 'Browser plugin mode' },
+  { group: 'Runtime / Security', key: 'ACP_PLUGIN_MODE', label: 'ACP plugin mode' },
+];
+
+const fieldMap = new Map(FIELDS.map((f) => [f.key, f]));
+let customCount = 0;
+let activeGroup = 'All';
+const $ = (id) => document.getElementById(id);
+const sections = $('sections');
+const groupNav = $('groupNav');
+const customRows = $('customRows');
+const bundleOut = $('bundleOut');
+const envLineOut = $('envLineOut');
+const summary = $('summary');
+const toast = $('toast');
+
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function safeKey(key) { return /^[A-Z_][A-Z0-9_]*$/.test(key) && !['HUGGINGCLAW_ENV_BUNDLE', 'ENV_BUNDLE'].includes(key); }
+function encodeBundle(obj) {
+  const json = JSON.stringify(obj);
+  let bin = '';
+  for (const b of new TextEncoder().encode(json)) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/,'');
+}
+function decodeBundle(raw) {
+  raw = String(raw || '').trim();
+  if (!raw) return {};
+  if (raw.includes('HUGGINGCLAW_ENV_BUNDLE=')) raw = raw.split('HUGGINGCLAW_ENV_BUNDLE=').pop().trim();
+  if ((raw.startsWith('\"') && raw.endsWith('\"')) || (raw.startsWith("'") && raw.endsWith("'"))) raw = raw.slice(1, -1);
+  if (raw.startsWith('{')) return JSON.parse(raw);
+  const padded = raw + '='.repeat((4 - raw.length % 4) % 4);
+  const bin = atob(padded.replace(/-/g, '+').replace(/_/g, '/'));
+  const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+function parseEnv(text) {
+  text = String(text || '').trim();
+  if (!text) return {};
+  if (text.startsWith('{') || /^[A-Za-z0-9_-]{20,}$/.test(text) || text.includes('HUGGINGCLAW_ENV_BUNDLE=')) return decodeBundle(text);
+  const out = {};
+  for (let line of text.split(/\r?\n/)) {
+    line = line.trim();
+    if (!line || line.startsWith('#')) continue;
+    if (line.startsWith('export ')) line = line.slice(7).trim();
+    const idx = line.indexOf('=');
+    if (idx < 1) continue;
+    const key = line.slice(0, idx).trim();
+    let value = line.slice(idx + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1);
+    if (safeKey(key)) out[key] = value;
+  }
+  return out;
+}
+function showToast(message = 'Copied') {
+  toast.textContent = message;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 1400);
+}
+function groupedFields() {
+  return FIELDS.reduce((acc, f) => ((acc[f.group] ||= []).push(f), acc), {});
+}
+function render() {
+  const groups = groupedFields();
+  groupNav.innerHTML = ['All', ...Object.keys(groups), 'Custom env'].map((g) => `<button class="ghost ${activeGroup === g ? 'active' : ''}" data-group="${esc(g)}"><span>${esc(g)}</span><span class="count" id="count-${esc(g).replace(/\W/g,'-')}">0</span></button>`).join('');
+  sections.innerHTML = Object.entries(groups).map(([group, items]) => `<div class="panel section" data-section="${esc(group)}"><h2>${esc(group)}</h2><p class="section-desc">${groupDescription(group)}</p>${items.map(renderField).join('')}</div>`).join('');
+  groupNav.querySelectorAll('button').forEach((btn) => btn.onclick = () => { activeGroup = btn.dataset.group; filter(); });
+  document.querySelectorAll('[data-key]').forEach((el) => el.addEventListener('input', refresh));
+  document.querySelectorAll('[data-check]').forEach((el) => el.addEventListener('change', () => { markSelected(); refresh(); }));
+  addCustomRow();
+  filter();
+  refresh();
+}
+function groupDescription(group) {
+  return ({
+    'Core': 'Required startup basics and Control UI authentication.',
+    'Provider Keys': 'Single provider keys that OpenClaw can auto-discover.',
+    'Rotation Pools': 'Comma-separated key pools for round-robin provider rotation.',
+    'Model Lists': 'Optional model lists visible in Control UI.',
+    'Custom Provider': 'OpenAI-compatible custom endpoint registration.',
+    'Telegram': 'Telegram bot and user access settings.',
+    'WhatsApp': 'WhatsApp pairing and guardian protocol knobs.',
+    'Cloudflare': 'Outbound proxy and network bypass settings.',
+    'Backup': 'Main HuggingClaw workspace backup dataset settings.',
+    'DevData / Jupyter': 'Jupyter terminal and separate DevData dataset backup.',
+    'Runtime / Security': 'Safe advanced runtime, logging, webhook and origin controls.',
+  })[group] || '';
+}
+function renderField(f) {
+  return `<div class="env-row" data-row data-group="${esc(f.group)}" data-search="${esc((f.group + ' ' + f.key + ' ' + f.label).toLowerCase())}">
+    <input class="check" type="checkbox" data-check="${esc(f.key)}" ${f.common ? 'data-common="1"' : ''}>
+    <div class="env-meta"><div class="key">${esc(f.key)} ${f.secret ? '<span class="secret">secret</span>' : '<span class="safe">safe</span>'}</div><div class="tagline">${esc(f.label || '')}</div></div>
+    <div class="value-wrap"><textarea data-key="${esc(f.key)}" placeholder="${esc(f.placeholder || f.label || '')}" spellcheck="false"></textarea><button class="ghost mini" data-focus="${esc(f.key)}" type="button">Edit</button></div>
+  </div>`;
+}
+function addCustomRow(key = '', value = '', checked = false) {
+  const id = customCount++;
+  const row = document.createElement('div');
+  row.className = 'custom-grid';
+  row.dataset.customRow = id;
+  row.innerHTML = `<input data-custom-key="${id}" placeholder="CUSTOM_ENV_NAME" value="${esc(key)}"><input data-custom-value="${id}" placeholder="value" value="${esc(value)}"><button class="ghost" data-custom-toggle="${id}">${checked ? 'On' : 'Off'}</button>`;
+  row.dataset.enabled = checked ? '1' : '0';
+  customRows.appendChild(row);
+  row.querySelectorAll('input').forEach((el) => el.addEventListener('input', refresh));
+  row.querySelector('button').onclick = () => { row.dataset.enabled = row.dataset.enabled === '1' ? '0' : '1'; row.querySelector('button').textContent = row.dataset.enabled === '1' ? 'On' : 'Off'; refresh(); };
+}
+function collect() {
+  const obj = {};
+  document.querySelectorAll('[data-check]').forEach((ch) => {
+    const key = ch.dataset.check;
+    const value = (document.querySelector(`[data-key="${CSS.escape(key)}"]`)?.value || '').trim();
+    if (ch.checked && value && safeKey(key)) obj[key] = value;
+  });
+  document.querySelectorAll('[data-custom-row]').forEach((row) => {
+    const id = row.dataset.customRow;
+    const key = (row.querySelector(`[data-custom-key="${id}"]`).value || '').trim();
+    const value = (row.querySelector(`[data-custom-value="${id}"]`).value || '').trim();
+    if (row.dataset.enabled === '1' && safeKey(key) && value) obj[key] = value;
+  });
+  return obj;
+}
+function refresh() {
+  const obj = collect();
+  const keys = Object.keys(obj).sort();
+  const bundle = keys.length ? encodeBundle(Object.fromEntries(keys.map((k) => [k, obj[k]]))) : '';
+  bundleOut.value = bundle;
+  envLineOut.value = bundle ? `HUGGINGCLAW_ENV_BUNDLE=${bundle}` : '';
+  summary.innerHTML = keys.length ? `<b>${keys.length}</b> settings selected:<br>${keys.map(esc).join(', ')}` : 'No settings selected yet.';
+  updateCounts();
+}
+function markSelected() {
+  document.querySelectorAll('[data-row]').forEach((row) => row.classList.toggle('selected', row.querySelector('[data-check]').checked));
+}
+function updateCounts() {
+  const selectedByGroup = {};
+  document.querySelectorAll('[data-check]:checked').forEach((ch) => {
+    const row = ch.closest('[data-row]');
+    selectedByGroup[row.dataset.group] = (selectedByGroup[row.dataset.group] || 0) + 1;
+  });
+  const total = Object.values(selectedByGroup).reduce((a, b) => a + b, 0) + document.querySelectorAll('[data-custom-row][data-enabled="1"]').length;
+  document.querySelectorAll('[id^="count-"]').forEach((el) => { el.textContent = '0'; });
+  const all = document.getElementById('count-All'); if (all) all.textContent = total;
+  for (const [group, count] of Object.entries(selectedByGroup)) {
+    const id = 'count-' + group.replace(/\W/g, '-');
+    const el = document.getElementById(id); if (el) el.textContent = count;
+  }
+  const custom = document.getElementById('count-Custom-env'); if (custom) custom.textContent = document.querySelectorAll('[data-custom-row][data-enabled="1"]').length;
+}
+function filter() {
+  const q = $('search').value.trim().toLowerCase();
+  document.querySelectorAll('[data-section]').forEach((section) => {
+    const groupMatch = activeGroup === 'All' || activeGroup === section.dataset.section;
+    let any = false;
+    section.querySelectorAll('[data-row]').forEach((row) => {
+      const match = groupMatch && (!q || row.dataset.search.includes(q));
+      row.classList.toggle('hidden', !match);
+      if (match) any = true;
+    });
+    section.style.display = any ? '' : 'none';
+  });
+  customRows.closest('.section').style.display = (activeGroup === 'All' || activeGroup === 'Custom env') ? '' : 'none';
+  groupNav.querySelectorAll('button').forEach((btn) => btn.classList.toggle('active', btn.dataset.group === activeGroup));
+}
+function clearForm() {
+  document.querySelectorAll('[data-check]').forEach((ch) => ch.checked = false);
+  document.querySelectorAll('[data-key]').forEach((el) => el.value = '');
+  customRows.innerHTML = '';
+  customCount = 0;
+  addCustomRow();
+}
+function applyObject(obj, { replace = false } = {}) {
+  if (replace) clearForm();
+  for (const [key, value] of Object.entries(obj || {})) {
+    if (!safeKey(key)) continue;
+    const input = document.querySelector(`[data-key="${CSS.escape(key)}"]`);
+    const check = document.querySelector(`[data-check="${CSS.escape(key)}"]`);
+    if (input && check) {
+      input.value = value;
+      check.checked = true;
+    } else {
+      addCustomRow(key, value, true);
+    }
+  }
+  markSelected(); filter(); refresh();
+}
+$('search').addEventListener('input', filter);
+$('selectVisible').onclick = () => { document.querySelectorAll('[data-row]:not(.hidden) [data-check]').forEach((ch) => ch.checked = true); markSelected(); refresh(); };
+$('selectCommon').onclick = () => { document.querySelectorAll('[data-common="1"]').forEach((ch) => ch.checked = true); markSelected(); refresh(); };
+$('clearAll').onclick = () => { clearForm(); markSelected(); filter(); refresh(); };
+$('applyImport').onclick = () => { try { applyObject(parseEnv($('importText').value), { replace: true }); showToast('Imported'); } catch (e) { showToast('Import failed'); alert(e.message); } };
+$('addCustom').onclick = () => addCustomRow('', '', false);
+$('applyBundle').onclick = () => { try { applyObject(decodeBundle(bundleOut.value), { replace: true }); showToast('Bundle applied'); } catch (e) { showToast('Invalid bundle'); alert(e.message); } };
+$('copyBundle').onclick = async () => { await navigator.clipboard.writeText(bundleOut.value); showToast('Bundle copied'); };
+$('copyEnvLine').onclick = async () => { await navigator.clipboard.writeText(envLineOut.value); showToast('.env line copied'); };
+$('copyJson').onclick = async () => { await navigator.clipboard.writeText(JSON.stringify(collect(), null, 2)); showToast('JSON copied'); };
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-focus]');
+  if (!btn) return;
+  const key = btn.dataset.focus;
+  const input = document.querySelector(`[data-key="${CSS.escape(key)}"]`);
+  if (input) input.focus();
+});
+render();
+</script>
+</body>
+</html>

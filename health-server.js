@@ -140,7 +140,7 @@ function renderDashboard(data) {
     .subtitle{margin-top:12px;color:var(--muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.14em;font-weight:800}
     .btn-row{display:flex;gap:12px;margin:24px 0 20px}
     .hero-action{display:flex;flex:1;min-height:46px;align-items:center;justify-content:center;border-radius:8px;background:#fff;color:#000;text-decoration:none;font-weight:850;font-size:.98rem;transition:opacity .15s}
-    .hero-action:hover{opacity:.9}.hero-action.terminal{background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a}
+    .hero-action:hover{opacity:.9}.hero-action.terminal{background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a}.hero-action.env{background:#312e81;color:#eef2ff;border:1px solid #6366f1}
     .overview{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:10px}
     .tile{border:1px solid var(--line);background:var(--panel);border-radius:11px;padding:18px;min-height:124px;display:flex;flex-direction:column;gap:10px}
     .tile.ok{border-color:rgba(34,197,94,.22)}.tile.warn{border-color:rgba(245,197,66,.24)}.tile.off{border-color:rgba(251,113,133,.28)}
@@ -163,6 +163,7 @@ function renderDashboard(data) {
   <div class="btn-row">
     <a class="hero-action" data-space-link="app" href="${APP_BASE}/">Open Control UI →</a>
     ${JUPYTER_ENABLED ? `<a class="hero-action terminal" data-space-link="terminal" href="${JUPYTER_BASE}/">💻 Open Terminal →</a>` : ""}
+    <a class="hero-action env" href="/env-builder">⚙️ Env Builder →</a>
   </div>
   <section class="overview">${tilesHtml}</section>
   <footer>Built by <a href="https://github.com/somratpro" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none">@somratpro</a>${JUPYTER_ENABLED ? " · Terminal by JupyterLab" : ""}<br><span>Public Spaces can be opened directly via <code>.hf.space</code>; private Spaces require the App tab session.</span></footer>
@@ -183,6 +184,14 @@ function renderDashboard(data) {
   });
 </script>
 </body></html>`;
+}
+
+function renderEnvBuilder() {
+  try {
+    return fs.readFileSync(require("path").join(__dirname, "env-builder.html"), "utf8");
+  } catch (exc) {
+    return `<!doctype html><title>Env Builder unavailable</title><pre>${escapeHtml(exc.message)}</pre>`;
+  }
 }
 
 // ── Generic proxy ──
@@ -285,6 +294,11 @@ const server = http.createServer(async (req, res) => {
     ]);
     res.writeHead(200, { "Content-Type": "application/json" });
     return res.end(JSON.stringify({ model: LLM_MODEL, uptime: formatUptime(Date.now() - startTime), gatewayReady, jupyterReady, sync: getSyncStatus(), whatsapp: readGuardianStatus(), keepalive: getKeepaliveStatus() }));
+  }
+
+  if (pathname === "/env-builder" || pathname === "/env-builder/") {
+    res.writeHead(200, { "Content-Type": "text/html" });
+    return res.end(renderEnvBuilder());
   }
 
   if (pathname === "/" || pathname === "/dashboard") {

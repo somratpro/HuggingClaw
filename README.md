@@ -19,6 +19,8 @@ secrets:
     description: "Model ID to use, e.g. google/gemini-2.5-flash or openai/gpt-4o."
   - name: GATEWAY_TOKEN
     description: "Strong token to secure your OpenClaw Control UI (generate: openssl rand -hex 32)."
+  - name: HUGGINGCLAW_ENV_BUNDLE
+    description: "Optional one-secret bundle generated from /env-builder for advanced configuration."
   - name: JUPYTER_TOKEN
     description: "Optional strong token for the JupyterLab terminal at /terminal/ (defaults to huggingface)."
   - name: CLOUDFLARE_WORKERS_TOKEN
@@ -46,6 +48,7 @@ secrets:
 - [✨ Features](#-features)
 - [🎥 Video Tutorial](#-video-tutorial)
 - [🚀 Quick Start](#-quick-start)
+- [⚙️ One-Env Builder *(Optional)*](#-one-env-builder-optional)
 - [📱 Telegram Setup *(Optional)*](#-telegram-setup-optional)
 - [🌐 Cloudflare Proxy *(Optional)*](#-cloudflare-proxy-optional)
 - [💬 WhatsApp Setup *(Optional)*](#-whatsapp-setup-optional)
@@ -76,6 +79,7 @@ secrets:
 - ⏰ **Easy Keep-Alive:** Uses `CLOUDFLARE_WORKERS_TOKEN` to automatically set up a cron-triggered keep-awake worker at boot.
 - 👥 **Multi-User Messaging:** Support for Telegram (multi-user) and WhatsApp (pairing).
 - 📊 **Visual Dashboard:** Beautiful Web UI to monitor uptime, sync status, and active models.
+- ⚙️ **One-Env Builder:** A standalone `/env-builder` page can bundle selected settings into one `HUGGINGCLAW_ENV_BUNDLE` secret.
 - 🔔 **Webhooks:** Get notified on restarts or backup failures via standard webhooks.
 - 🔐 **Flexible Auth:** Secure the Control UI with either a gateway token or password.
 - 💻 **Optional Dev Terminal:** JupyterLab is available at `/terminal/` only when `DEV_MODE=true` (disabled by default).
@@ -105,6 +109,17 @@ Navigate to your new Space's **Settings**, scroll down to the **Variables and se
 > HuggingClaw is completely flexible! You only need these three secrets to get started. You can set other secrets later.
 
 Optional: set `DEV_MODE=true` (Variable) to enable JupyterLab support and install Jupyter dependencies at build time. You can also set `JUPYTER_TOKEN` as a Secret to replace the default terminal token (`huggingface`). If you want to pin a specific OpenClaw release instead of `latest`, add `OPENCLAW_VERSION` under **Variables** in your Space settings. For Docker Spaces, HF passes Variables as build args during image build, so these should be Variables, not Secrets (except tokens).
+
+## ⚙️ One-Env Builder *(Optional)*
+
+If you do not want to manage many Hugging Face Space variables one by one, open the dashboard and click **Env Builder** (`/env-builder`). It is a standalone setup page outside the OpenClaw Control UI.
+
+1. Paste existing `.env` lines, raw JSON, or an old `HUGGINGCLAW_ENV_BUNDLE` into **Import existing env** if you already have settings.
+2. Select/edit safe user-facing options by section (core, provider keys, rotation pools, Telegram, WhatsApp, Cloudflare, backup, DevData/Jupyter, runtime/security), or add any extra uppercase env name under **Custom env**.
+3. Copy the generated `HUGGINGCLAW_ENV_BUNDLE` value, or edit the copyable bundle block and click **Apply edited bundle** to load it back into the form.
+4. Add that one value as a Space Secret or Variable and restart the Space.
+
+At startup, `start.sh` expands `HUGGINGCLAW_ENV_BUNDLE` into normal environment variables before configuring OpenClaw, Telegram, WhatsApp, Cloudflare, backups, and DevData. If you also set an individual Space variable/secret with the same name, the individual value wins over the bundled value.
 
 ### Step 3: Deploy & Run
 
