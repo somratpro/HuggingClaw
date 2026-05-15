@@ -163,7 +163,7 @@ function renderDashboard(data) {
   <div class="btn-row">
     <a class="hero-action" data-space-link="app" href="${APP_BASE}/">Open Control UI →</a>
     ${JUPYTER_ENABLED ? `<a class="hero-action terminal" data-space-link="terminal" href="${JUPYTER_BASE}/">💻 Open Terminal →</a>` : ""}
-    <a class="hero-action env" href="/env-builder">⚙️ Env Builder →</a>
+    <a class="hero-action env" data-space-link="env-builder" href="/env-builder">⚙️ Env Builder →</a>
   </div>
   <section class="overview">${tilesHtml}</section>
   <footer>Built by <a href="https://github.com/somratpro" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none">@somratpro</a>${JUPYTER_ENABLED ? " · Terminal by JupyterLab" : ""}<br><span>Public Spaces can be opened directly via <code>.hf.space</code>; private Spaces require the App tab session.</span></footer>

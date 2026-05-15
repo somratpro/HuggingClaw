@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
 import os, shutil, tempfile, time
 from pathlib import Path
 
@@ -10,7 +12,18 @@ JUPYTER_ROOT = Path(os.environ.get("JUPYTER_ROOT_DIR", "/home/node")).resolve()
 INTERVAL = int((os.environ.get("DEVDATA_SYNC_INTERVAL", "").strip() or "180"))
 ENABLE = os.environ.get("DEVDATA", "on").strip().lower() not in {"off","false","0","no"}
 
-EXCLUDE = {".cache", "node_modules", ".npm", ".yarn", ".local/share/Trash", ".ipynb_checkpoints"}
+EXCLUDE = {
+    ".cache",
+    "node_modules",
+    ".npm",
+    ".yarn",
+    ".local/share/Trash",
+    ".ipynb_checkpoints",
+    ".openclaw",
+    "app",
+    "HuggingClaw",
+    "HuggingClaw-Workspace",
+}
 
 def enabled():
     dev = os.environ.get("DEV_MODE", "").strip().lower() in {"1","true","yes","on"}
@@ -36,6 +49,8 @@ def snapshot(src: Path, dst: Path):
     for p in src.rglob("*"):
         rel = p.relative_to(src)
         if should_skip(rel):
+            continue
+        if p.is_symlink():
             continue
         target = dst / rel
         if p.is_dir():
