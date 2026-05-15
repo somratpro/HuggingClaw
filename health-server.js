@@ -302,7 +302,7 @@ const server = http.createServer(async (req, res) => {
   if (pathname === "/status") {
     const [gatewayReady, jupyterReady] = await Promise.all([
       probePort(GATEWAY_HOST, GATEWAY_PORT, "/health"),
-      JUPYTER_ENABLED ? probePort(JUPYTER_HOST, JUPYTER_PORT, `${JUPYTER_BASE}/api`) : Promise.resolve(false),
+      JUPYTER_ENABLED ? probePort(JUPYTER_HOST, JUPYTER_PORT, `${JUPYTER_BASE}/api/status`) : Promise.resolve(false),
     ]);
     res.writeHead(200, { "Content-Type": "application/json" });
     return res.end(JSON.stringify({ model: LLM_MODEL, uptime: formatUptime(Date.now() - startTime), gatewayReady, jupyterReady, sync: getSyncStatus(), whatsapp: readGuardianStatus(), keepalive: getKeepaliveStatus() }));
@@ -316,7 +316,7 @@ const server = http.createServer(async (req, res) => {
   if (pathname === "/" || pathname === "/dashboard") {
     const [gatewayReady, jupyterReady] = await Promise.all([
       probePort(GATEWAY_HOST, GATEWAY_PORT, "/health"),
-      JUPYTER_ENABLED ? probePort(JUPYTER_HOST, JUPYTER_PORT, `${JUPYTER_BASE}/api`) : Promise.resolve(false),
+      JUPYTER_ENABLED ? probePort(JUPYTER_HOST, JUPYTER_PORT, `${JUPYTER_BASE}/api/status`) : Promise.resolve(false),
     ]);
     res.writeHead(200, { "Content-Type": "text/html" });
     return res.end(renderDashboard({ uptimeHuman: formatUptime(Date.now() - startTime), gatewayReady, jupyterReady, sync: getSyncStatus(), whatsapp: readGuardianStatus(), keepalive: getKeepaliveStatus() }));
@@ -377,11 +377,15 @@ server.on("upgrade", (req, socket, head) => {
     if (head && head.length) ps.write(head);
     ps.pipe(socket).pipe(ps);
   });
-  ps.on("error", () => socket.destroy());
+  ps.on("error",     () => socket.destroy());
+  ps.on("close",     () => socket.destroy());
+  socket.on("error", () => ps.destroy());
+  socket.on("close", () => ps.destroy());
 });
 
 server.timeout = 0;
 server.keepAliveTimeout = 65000;
+server.on("error", (err) => console.error(`[health-server] Server error:`, err));
 server.listen(PORT, "0.0.0.0", () =>
   console.log(`🦞 HuggingClaw :${PORT} → Gateway :${GATEWAY_PORT}${JUPYTER_ENABLED ? ` | Terminal :${JUPYTER_PORT} at ${JUPYTER_BASE}/` : " | Terminal disabled"}`),
 );
