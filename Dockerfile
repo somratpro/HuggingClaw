@@ -14,8 +14,9 @@ FROM ghcr.io/openclaw/openclaw:${OPENCLAW_VERSION} AS openclaw
 # ── Stage 2: Runtime ──
 FROM node:22-slim
 ARG OPENCLAW_VERSION=latest
+ARG DEV_MODE=false
 
-# Install system dependencies + JupyterLab deps
+# Install system dependencies (+ optional JupyterLab deps in DEV_MODE)
 RUN apt-get update && apt-get install -y \
     git \
     sudo \
@@ -47,10 +48,13 @@ RUN apt-get update && apt-get install -y \
     xfonts-scalable \
     --no-install-recommends && \
     pip3 install --no-cache-dir --break-system-packages \
-        huggingface_hub \
+        huggingface_hub && \
+    if [ "${DEV_MODE}" = "true" ] || [ "${DEV_MODE}" = "1" ] || [ "${DEV_MODE}" = "yes" ] || [ "${DEV_MODE}" = "on" ]; then \
+      pip3 install --no-cache-dir --break-system-packages \
         jupyterlab==4.5.7 \
         tornado==6.5.5 \
-        ipywidgets==8.1.8 && \
+        ipywidgets==8.1.8; \
+    fi && \
     rm -rf /var/lib/apt/lists/*
 
 # Reuse existing node user (UID 1000). Allow passwordless package-manager
@@ -88,7 +92,7 @@ COPY --chown=1000:1000 wa-guardian.js /home/node/app/wa-guardian.js
 COPY --chown=1000:1000 cloudflare-keepalive-setup.py /home/node/app/cloudflare-keepalive-setup.py
 COPY --chown=1000:1000 openclaw-sync.py /home/node/app/openclaw-sync.py
 COPY --chown=1000:1000 multi-provider-key-rotator.cjs /home/node/app/multi-provider-key-rotator.cjs
-RUN python3 -c "from pathlib import Path; import shutil, jupyter_server; template_dir = Path(jupyter_server.__file__).parent / 'templates'; template_dir.mkdir(parents=True, exist_ok=True); shutil.copyfile('/home/node/app/login.html', template_dir / 'login.html')"
+RUN if [ "${DEV_MODE}" = "true" ] || [ "${DEV_MODE}" = "1" ] || [ "${DEV_MODE}" = "yes" ] || [ "${DEV_MODE}" = "on" ]; then python3 -c "from pathlib import Path; import shutil, jupyter_server; template_dir = Path(jupyter_server.__file__).parent / 'templates'; template_dir.mkdir(parents=True, exist_ok=True); shutil.copyfile('/home/node/app/login.html', template_dir / 'login.html')"; fi
 RUN chmod +x /home/node/app/start.sh \
               /home/node/app/cloudflare-proxy-setup.py \
               /home/node/app/cloudflare-keepalive-setup.py \

@@ -78,7 +78,7 @@ secrets:
 - 📊 **Visual Dashboard:** Beautiful Web UI to monitor uptime, sync status, and active models.
 - 🔔 **Webhooks:** Get notified on restarts or backup failures via standard webhooks.
 - 🔐 **Flexible Auth:** Secure the Control UI with either a gateway token or password.
-- 💻 **Built-in Terminal:** JupyterLab runs at `/terminal/` with the Hugging Face login template and token auth.
+- 💻 **Optional Dev Terminal:** JupyterLab is available at `/terminal/` only when `DEV_MODE=true` (disabled by default).
 - 🏠 **100% HF-Native:** Runs entirely on HuggingFace’s free infrastructure (2 vCPU, 16GB RAM).
 
 ## 🎥 Video Tutorial
@@ -104,7 +104,7 @@ Navigate to your new Space's **Settings**, scroll down to the **Variables and se
 > [!TIP]
 > HuggingClaw is completely flexible! You only need these three secrets to get started. You can set other secrets later.
 
-Optional: set `JUPYTER_TOKEN` as a Secret to replace the default terminal token (`huggingface`), and if you want to pin a specific OpenClaw release instead of `latest`, add `OPENCLAW_VERSION` under **Variables** in your Space settings. For Docker Spaces, HF passes Variables as build args during image build, so this should be a Variable, not a Secret.
+Optional: set `DEV_MODE=true` (Variable) to enable JupyterLab support and install Jupyter dependencies at build time. You can also set `JUPYTER_TOKEN` as a Secret to replace the default terminal token (`huggingface`). If you want to pin a specific OpenClaw release instead of `latest`, add `OPENCLAW_VERSION` under **Variables** in your Space settings. For Docker Spaces, HF passes Variables as build args during image build, so these should be Variables, not Secrets (except tokens).
 
 ### Step 3: Deploy & Run
 
@@ -366,9 +366,9 @@ The merged Space includes the Hugging Face JupyterLab template behavior inside t
 | :--- | :--- | :--- | :--- |
 | `/` | HuggingClaw dashboard | `7861` | Public HF Spaces entrypoint |
 | `/app/` | OpenClaw Control UI | `7860` | Mounted behind the local reverse proxy |
-| `/terminal/` | JupyterLab terminal | `8888` | Token login, default token `huggingface` unless `JUPYTER_TOKEN` is set |
+| `/terminal/` | JupyterLab terminal (DEV_MODE only) | `8888` | Available only when `DEV_MODE=true`; token login uses `JUPYTER_TOKEN` (default `huggingface`) |
 
-The terminal notebook root is `/home/node`, so you can inspect HuggingClaw files, logs, workspace state, and runtime scripts from the browser.
+When enabled, the terminal notebook root is `/home/node`, so you can inspect HuggingClaw files, logs, workspace state, and runtime scripts from the browser.
 
 > [!IMPORTANT]
 > For real deployments, set a strong `JUPYTER_TOKEN` secret. The `huggingface` default exists only to match the duplicateable Hugging Face JupyterLab template.
@@ -389,9 +389,9 @@ HuggingClaw uses a multi-layered approach to ensure stability and persistence on
 <details>
 <summary><b>Click to view technical details</b></summary>
 
-- **Dashboard (`/`)**: Management, monitoring, terminal link, and keep-alive tools.
+- **Dashboard (`/`)**: Management, monitoring, and keep-alive tools (terminal controls appear only in DEV mode).
 - **Control UI (`/app/`)**: Secure interface for managing agents and channels, proxied to the OpenClaw gateway on internal port `7860`.
-- **JupyterLab Terminal (`/terminal/`)**: Browser terminal/notebook server on internal port `8888`.
+- **JupyterLab Terminal (`/terminal/`)**: Browser terminal/notebook server on internal port `8888` (DEV mode only).
 - **Health Check (`/health`)**: Endpoint for uptime monitoring and readiness probes.
 - **Sync Engine**: Python background process managing HF Dataset persistence.
 - **Transparent Proxy**: Interceptor for requests to blocked domains (Telegram, etc.).
@@ -402,7 +402,7 @@ HuggingClaw uses a multi-layered approach to ensure stability and persistence on
 2. Resolve backup namespace and restore workspace from HF Dataset.
 3. Generate `openclaw.json` configuration.
 4. Launch background tasks (auto-sync, channel helpers).
-5. Start the local dashboard/reverse proxy, JupyterLab terminal, and OpenClaw gateway.
+5. Start the local dashboard/reverse proxy and OpenClaw gateway (JupyterLab starts only when `DEV_MODE=true`).
 
 </details>
 

@@ -779,6 +779,9 @@ export PYTHONUSERBASE="${PYTHONUSERBASE:-/home/node/.local}"
 export DEBIAN_FRONTEND="${DEBIAN_FRONTEND:-noninteractive}"
 STARTUP_FILE="/home/node/.openclaw/workspace/startup.sh"
 _hc_append() {
+  if [ "${HUGGINGCLAW_CAPTURE_DISABLE:-0}" = "1" ]; then
+    return 0
+  fi
   local line="$*"
   mkdir -p "$(dirname "$STARTUP_FILE")"
   touch "$STARTUP_FILE"
@@ -804,6 +807,28 @@ _hc_append_cmd() {
   else
     _hc_append "$cmd"
   fi
+}
+_hc_args_without_flags() {
+  local out=()
+  local arg
+  for arg in "$@"; do
+    case "$arg" in
+      ''|-) ;;
+      --*) ;;
+      -*) ;;
+      *) out+=("$arg") ;;
+    esac
+  done
+  printf '%s\n' "${out[@]}"
+}
+_hc_has_install_targets() {
+  local item
+  while IFS= read -r item; do
+    [ -n "$item" ] && return 0
+  done <<EOF
+$(_hc_args_without_flags "$@")
+EOF
+  return 1
 }
 _hc_allow_openclaw_plugins() {
   local config="/home/node/.openclaw/openclaw.json"
@@ -856,7 +881,7 @@ apt-get() {
       _hc_apt_install "$@"
       local rc=$?
       if [ $rc -eq 0 ]; then
-        _hc_append_cmd "sudo apt-get update && sudo apt-get install -y" "$@"
+        _hc_has_install_targets "$@" && _hc_append_cmd "sudo apt-get update && sudo apt-get install -y" "$@"
       fi
       return $rc
       ;;
@@ -883,7 +908,7 @@ apt() {
       _hc_apt_install "$@"
       local rc=$?
       if [ $rc -eq 0 ]; then
-        _hc_append_cmd "sudo apt-get update && sudo apt-get install -y" "$@"
+        _hc_has_install_targets "$@" && _hc_append_cmd "sudo apt-get update && sudo apt-get install -y" "$@"
       fi
       return $rc
       ;;
@@ -910,7 +935,7 @@ pip() {
     command pip "$@"
   fi
   local rc=$?
-  if [ $rc -eq 0 ] && [ "${1:-}" = "install" ]; then
+  if [ $rc -eq 0 ] && [ "${1:-}" = "install" ] && _hc_has_install_targets "${@:2}"; then
     _hc_append_cmd "python3 -m pip install --user" "${@:2}"
   fi
   return $rc
@@ -922,15 +947,39 @@ pip3() {
     command pip3 "$@"
   fi
   local rc=$?
-  if [ $rc -eq 0 ] && [ "${1:-}" = "install" ]; then
+  if [ $rc -eq 0 ] && [ "${1:-}" = "install" ] && _hc_has_install_targets "${@:2}"; then
     _hc_append_cmd "python3 -m pip install --user" "${@:2}"
+  fi
+  return $rc
+}
+python() {
+  if [ "${1:-}" = "-m" ] && [ "${2:-}" = "pip" ] && [ "${3:-}" = "install" ] && [ -z "${VIRTUAL_ENV:-}" ] && ! _hc_has_arg --user "${@:3}" && ! _hc_has_arg --prefix "${@:3}"; then
+    command python -m pip install --user "${@:4}"
+  else
+    command python "$@"
+  fi
+  local rc=$?
+  if [ $rc -eq 0 ] && [ "${1:-}" = "-m" ] && [ "${2:-}" = "pip" ] && [ "${3:-}" = "install" ] && _hc_has_install_targets "${@:4}"; then
+    _hc_append_cmd "python3 -m pip install --user" "${@:4}"
+  fi
+  return $rc
+}
+python3() {
+  if [ "${1:-}" = "-m" ] && [ "${2:-}" = "pip" ] && [ "${3:-}" = "install" ] && [ -z "${VIRTUAL_ENV:-}" ] && ! _hc_has_arg --user "${@:3}" && ! _hc_has_arg --prefix "${@:3}"; then
+    command python3 -m pip install --user "${@:4}"
+  else
+    command python3 "$@"
+  fi
+  local rc=$?
+  if [ $rc -eq 0 ] && [ "${1:-}" = "-m" ] && [ "${2:-}" = "pip" ] && [ "${3:-}" = "install" ] && _hc_has_install_targets "${@:4}"; then
+    _hc_append_cmd "python3 -m pip install --user" "${@:4}"
   fi
   return $rc
 }
 npm() {
   command npm "$@"
   local rc=$?
-  if [ $rc -eq 0 ] && [ "${1:-}" = "install" ] && { [ "${2:-}" = "-g" ] || [ "${2:-}" = "--global" ]; }; then
+  if [ $rc -eq 0 ] && { [ "${1:-}" = "install" ] || [ "${1:-}" = "i" ]; } && { [ "${2:-}" = "-g" ] || [ "${2:-}" = "--global" ]; } && _hc_has_install_targets "${@:3}"; then
     _hc_append_cmd "npm install -g" "${@:3}"
   fi
   return $rc
@@ -938,7 +987,7 @@ npm() {
 openclaw() {
   command openclaw "$@"
   local rc=$?
-  if [ $rc -eq 0 ] && [ "${1:-}" = "plugins" ] && [ "${2:-}" = "install" ]; then
+  if [ $rc -eq 0 ] && [ "${1:-}" = "plugins" ] && [ "${2:-}" = "install" ] && _hc_has_install_targets "${@:3}"; then
     _hc_allow_openclaw_plugins "${@:3}"
     _hc_append_cmd "openclaw plugins install" "${@:3}"
   fi
@@ -984,7 +1033,7 @@ hc_run_startup_command() {
 
   echo "[startup:${source_label}] $command_text"
   set +e
-  bash -lc "$command_text"
+  HUGGINGCLAW_CAPTURE_DISABLE=1 bash -lc "$command_text"
   local rc=$?
   set -e
   if [ "$rc" -eq 0 ]; then
@@ -1008,6 +1057,7 @@ hc_run_startup_script() {
     # Load HuggingClaw's install wrappers for env-provided scripts too, so
     # `apt install`, `pip install`, `npm install -g`, and OpenClaw plugin
     # installs behave the same way as they do in the interactive shell.
+    echo 'export HUGGINGCLAW_CAPTURE_DISABLE=1'
     echo '[ -f /home/node/.bashrc ] && . /home/node/.bashrc'
     printf '%s\n' "$script_text"
   } > "$script_file"

@@ -101,13 +101,18 @@ function renderDashboard(data) {
 
   const tiles = [
     tile({ title: "Gateway", value: badge(data.gatewayReady ? "Online" : "Offline", data.gatewayReady ? "ok" : "off"), detail: `OpenClaw on internal port ${GATEWAY_PORT}`, tone: data.gatewayReady ? "ok" : "off" }),
-    tile({ title: "Terminal", value: DEV_MODE_ENABLED ? badge(data.jupyterReady ? "Online" : "Starting…", data.jupyterReady ? "ok" : "warn") : badge("Disabled", "neutral"), detail: DEV_MODE_ENABLED ? `JupyterLab at <a href="${JUPYTER_BASE}/" style="color:inherit">${JUPYTER_BASE}/</a>` : "Enable with DEV_MODE=true", tone: DEV_MODE_ENABLED ? (data.jupyterReady ? "ok" : "warn") : "neutral" }),
     tile({ title: "Model", value: `<code>${escapeHtml(LLM_MODEL)}</code>`, detail: "Primary LLM configured", tone: "neutral" }),
     tile({ title: "Runtime", value: escapeHtml(data.uptimeHuman), detail: `Public port ${PORT}`, tone: "neutral" }),
     tile({ title: "Telegram", value: badge(TELEGRAM_ENABLED ? "Enabled" : "Disabled", TELEGRAM_ENABLED ? "ok" : "neutral"), detail: TELEGRAM_ENABLED ? "Bot channel active" : "Not configured", tone: TELEGRAM_ENABLED ? "ok" : "neutral" }),
     tile({ title: "Backup", value: badge(syncStatus.toUpperCase(), syncTone), detail: escapeHtml(data.sync?.message || "No status yet"), tone: syncTone, meta: data.sync?.timestamp ? `<span class="local-time" data-iso="${data.sync.timestamp}"></span>` : "" }),
     tile({ title: "Keep Awake", value: badge(kaConf ? "CF Cron" : kaStatus.toUpperCase(), kaTone), detail: kaConf ? `Pinging <code>${escapeHtml(data.keepalive?.targetUrl || "/health")}</code>` : process.env.CLOUDFLARE_WORKERS_TOKEN ? "Worker pending or failed" : "Not configured", tone: kaTone }),
-  ].join("");
+  ];
+
+  if (DEV_MODE_ENABLED) {
+    tiles.push(tile({ title: "Terminal", value: badge(data.jupyterReady ? "Online" : "Starting…", data.jupyterReady ? "ok" : "warn"), detail: `JupyterLab at <a href="${JUPYTER_BASE}/" style="color:inherit">${JUPYTER_BASE}/</a>`, tone: data.jupyterReady ? "ok" : "warn" }));
+  }
+
+  const tilesHtml = tiles.join("");
 
   return `<!doctype html><html lang="en"><head>
   <meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
@@ -139,13 +144,13 @@ function renderDashboard(data) {
     footer{color:var(--muted);text-align:center;font-size:.74rem;margin-top:18px}
     @media(max-width:700px){.overview{grid-template-columns:1fr}main{width:min(100% - 22px,720px);padding-top:28px}.btn-row{flex-direction:column}}
   </style></head><body><main>
-  <header><h1>🦞 HuggingClaw</h1><div class="subtitle">OpenClaw Gateway + JupyterLab Terminal</div></header>
+  <header><h1>🦞 HuggingClaw</h1><div class="subtitle">OpenClaw Gateway</div></header>
   <div class="btn-row">
     <a class="hero-action" href="${APP_BASE}/">Open Control UI →</a>
-    ${DEV_MODE_ENABLED ? `<a class="hero-action terminal" href="${JUPYTER_BASE}/">💻 Open Terminal →</a>` : `<span class="hero-action terminal" style="opacity:.55;cursor:not-allowed" aria-disabled="true">💻 Terminal Disabled (DEV_MODE=false)</span>`}
+    ${DEV_MODE_ENABLED ? `<a class="hero-action terminal" href="${JUPYTER_BASE}/">💻 Open Terminal →</a>` : ""}
   </div>
-  <section class="overview">${tiles}</section>
-  <footer>Built by <a href="https://github.com/somratpro" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none">@somratpro</a> · Terminal by JupyterLab<br><span>Private HF Spaces: use these in-frame buttons instead of opening raw <code>.hf.space</code> URLs in a new tab.</span></footer>
+  <section class="overview">${tilesHtml}</section>
+  <footer>Built by <a href="https://github.com/somratpro" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none">@somratpro</a>${DEV_MODE_ENABLED ? " · Terminal by JupyterLab" : ""}<br><span>Private HF Spaces: use these in-frame buttons instead of opening raw <code>.hf.space</code> URLs in a new tab.</span></footer>
   </main>
   <script>document.querySelectorAll('.local-time').forEach(el=>{const d=new Date(el.getAttribute('data-iso'));if(!isNaN(d))el.textContent='At '+d.toLocaleTimeString()});</script>
 </body></html>`;
