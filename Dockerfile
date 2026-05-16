@@ -91,6 +91,7 @@ COPY --chown=1000:1000 cloudflare-proxy.js /opt/cloudflare-proxy.js
 COPY --chown=1000:1000 cloudflare-proxy-setup.py /home/node/app/cloudflare-proxy-setup.py
 COPY --chown=1000:1000 health-server.js /home/node/app/health-server.js
 COPY --chown=1000:1000 login.html /home/node/app/login.html
+COPY --chown=1000:1000 env-builder.html /home/node/app/env-builder.html
 COPY --chown=1000:1000 iframe-fix.cjs /home/node/app/iframe-fix.cjs
 COPY --chown=1000:1000 start.sh /home/node/app/start.sh
 COPY --chown=1000:1000 wa-guardian.js /home/node/app/wa-guardian.js
