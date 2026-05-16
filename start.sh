@@ -458,8 +458,10 @@ inject_provider_models_from_env() {
   CONFIG_JSON=$(jq \
     --arg provider "$provider" \
     --argjson models "$models_json" \
-    '.models.mode = "merge"
-     | .models.providers[$provider] = ((.models.providers[$provider] // {}) + {models: $models})' <<<"$CONFIG_JSON")
+    'if .models.providers[$provider] then
+       .models.mode = "merge"
+       | .models.providers[$provider].models = $models
+     else . end' <<<"$CONFIG_JSON")
 }
 
 # Built-in provider model envs (optional)
@@ -1420,6 +1422,9 @@ if [ -n "${HUGGINGCLAW_OPENCLAW_PLUGINS:-}" ]; then
   fi
 fi
 
+# ── Fix config before running startup commands ──
+openclaw doctor --fix || true
+
 # ── Arbitrary startup commands from HF Variables/Secrets ──
 # Recommended: use one variable, HUGGINGCLAW_RUN, as a full bash script. If the
 # value starts with base64: or b64:, the rest is decoded and run as the script.
@@ -1561,6 +1566,7 @@ while true; do
     fi
   fi
 
+  openclaw doctor --fix || true
   echo "Launching OpenClaw gateway on port 7860..."
 
   GATEWAY_ARGS=(gateway run --port 7860 --bind lan)
@@ -1597,7 +1603,9 @@ while true; do
     echo "Gateway failed to start. Last 30 lines of log:"
     echo "────────────────────────────────────────────"
     tail -30 /home/node/.openclaw/gateway.log
-    exit 1
+    echo "Gateway failed — JupyterLab and env-builder still running. Retrying in 10s..."
+    sleep 10
+    continue
   fi
 
   # 11. Start WhatsApp Guardian after the gateway is accepting connections
@@ -1622,7 +1630,8 @@ while true; do
   GATEWAY_RESTART_COUNT=$((GATEWAY_RESTART_COUNT + 1))
   if [ "$GATEWAY_MAX_RESTARTS" != "0" ] && [ "$GATEWAY_RESTART_COUNT" -ge "$GATEWAY_MAX_RESTARTS" ]; then
     echo "Gateway exited with code ${GATEWAY_EXIT_CODE}; restart limit (${GATEWAY_MAX_RESTARTS}) reached."
-    exit "$GATEWAY_EXIT_CODE"
+    echo "Gateway stopped — JupyterLab and env-builder still running."
+    break
   fi
 
   echo "Gateway exited with code ${GATEWAY_EXIT_CODE}; restarting in ${GATEWAY_RESTART_DELAY}s..."
