@@ -848,7 +848,15 @@ start_jupyter_once() {
     return 0
   fi
 
-  JUPYTER_TOKEN="${JUPYTER_TOKEN:-huggingface}"
+  # Security guard: refuse to start JupyterLab with the insecure default token.
+  # JupyterLab exposes a full shell — a weak token is equivalent to no auth.
+  if [ -z "${JUPYTER_TOKEN:-}" ] || [ "${JUPYTER_TOKEN}" = "huggingface" ]; then
+    echo "ERROR: JUPYTER_TOKEN is unset or still set to the insecure default (\"huggingface\")." >&2
+    echo "       JupyterLab grants full shell access. Set a strong, unique token in your Space secrets." >&2
+    echo "       Hint:  openssl rand -hex 32" >&2
+    echo "       DEV_MODE active but JupyterLab will NOT start until JUPYTER_TOKEN is changed." >&2
+    return 1
+  fi
   JUPYTER_ROOT_DIR="${JUPYTER_ROOT_DIR:-/home/node}"
   if [ "$JUPYTER_ROOT_DIR" = "/home/node/.openclaw/workspace" ] && [ "$DEVDATA_ENABLED" = "true" ]; then
     echo "Jupyter root was set to OpenClaw workspace; moving Jupyter root to /home/node/devdata to keep BACKUP and DEVDATA datasets separate."
