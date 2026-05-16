@@ -240,7 +240,7 @@ function renderDashboard(data) {
     <a class="hero-action env" data-space-link="env-builder" href="/env-builder">⚙️ Env Builder →</a>
   </div>
   <section class="overview">${tilesHtml}</section>
-  <footer>Built by <a href="https://github.com/somratpro" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none">@somratpro</a>${JUPYTER_ENABLED ? " · Terminal by JupyterLab" : ""}<br><span>Public Spaces open via <code>.hf.space</code> directly. Private Spaces require the <a href="${HF_SPACE_URL || "#"}" target="_blank" rel="noopener noreferrer" style="color:inherit">Hugging Face App tab</a> for the authenticated session${HF_SPACE_URL ? ` — or share <code>huggingface.co/spaces/${SPACE_ID}</code>` : ""}.</span></footer>
+  <footer>Built by <a href="https://github.com/somratpro" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none">@somratpro</a>${JUPYTER_ENABLED ? " · Terminal by JupyterLab" : ""}<br><span>${SPACE_IS_PRIVATE ? `🔒 Private Space — all links open within the Space.` : `Public Spaces open via <code>.hf.space</code> directly. Private Spaces open all links within the <a href="${HF_SPACE_URL || "#"}" target="_blank" rel="noopener noreferrer" style="color:inherit">Hugging Face App tab</a>.`}</span></footer>
   </main>
   <script>
   document.querySelectorAll('.local-time').forEach(el=>{const d=new Date(el.getAttribute('data-iso'));if(!isNaN(d))el.textContent='At '+d.toLocaleTimeString()});
@@ -259,9 +259,12 @@ function renderDashboard(data) {
     document.body.appendChild(notice);
     setTimeout(() => { window.location.replace(HF_SPACE_URL); }, 300);
   }
-  // If inside the HF App iframe, force new-tab navigation so users can break out
-  // to the standalone Space host. Also keep direct .hf.space behavior opening new tabs.
-  const openInNewTab = inEmbeddedApp || isDirectHfSpaceHost;
+  // If inside the HF App iframe on a PRIVATE space, keep navigation in the
+  // same frame — all routes (/app/, /terminal/, /env-builder) are proxied
+  // through this server so same-origin navigation works fine.
+  // Public spaces: open in new tab when in HF iframe or direct .hf.space
+  // so users can break out to the full standalone Space URL.
+  const openInNewTab = !SPACE_IS_PRIVATE && (inEmbeddedApp || isDirectHfSpaceHost);
   document.querySelectorAll('a[data-space-link]').forEach((a) => {
     if (openInNewTab) {
       a.setAttribute('target', '_blank');
@@ -435,11 +438,18 @@ const server = http.createServer(async (req, res) => {
   // and WebSocket upgrades pass through untouched.
   // /health and /status are always exempt so uptime monitors keep working.
   const isHtmlRequest = (req.headers.accept || "").includes("text/html");
+  // In-app navigation (clicking links within the HF iframe) sends a Referer
+  // from the same .hf.space origin — don't redirect those, only redirect
+  // fresh direct browser access that has no same-origin referer.
+  const referer = req.headers.referer || req.headers.referrer || "";
+  const isSameOriginNav = !!(referer && typeof req.headers.host === "string" &&
+    referer.startsWith(`https://${req.headers.host}`));
   const isDirectHfSpaceRequest = SPACE_IS_PRIVATE &&
     HF_SPACE_URL &&
     isHtmlRequest &&
     typeof req.headers.host === "string" &&
-    req.headers.host.endsWith(".hf.space");
+    req.headers.host.endsWith(".hf.space") &&
+    !isSameOriginNav;
 
   if (pathname === "/env-builder" || pathname === "/env-builder/") {
     if (isDirectHfSpaceRequest) {
