@@ -2011,6 +2011,9 @@ function collect() {
   document.querySelectorAll('[data-key]').forEach(el => {
     const key = el.dataset.key;
     if (!key || !safeKey(key)) return;
+    // Only include if the card's checkbox is ticked
+    const chk = document.querySelector(`[data-check="${CSS.escape(key)}"]`);
+    if (!chk || !chk.checked) return;
     const val = String(el.value ?? '').trim();
     if (val) obj[key] = val;
   });
@@ -2124,6 +2127,14 @@ function applyObj(obj, replace = false) {
   markSelected(); filter(); refresh();
 }
 
+function autoCheck(key) {
+  const chk = document.querySelector(`[data-check="${CSS.escape(key)}"]`);
+  if (chk && !chk.checked) {
+    chk.checked = true;
+    markSelected();
+  }
+}
+
 function handlePickerChange(sel) {
   const key = sel.dataset.pickFor;
   const mode = sel.closest('[data-picker-shell]')?.dataset.pickerMode || 'single';
@@ -2142,6 +2153,7 @@ function handlePickerChange(sel) {
     inp.value = value;
   }
   sel.value = '';
+  autoCheck(key);
   refresh();
 }
 
@@ -2166,6 +2178,7 @@ function promptCustomModel(btn) {
   } else {
     inp.value = val;
   }
+  autoCheck(key);
   refresh();
 }
 
@@ -2195,6 +2208,12 @@ function toggleField(key) {
   if (btn) {
     btn.textContent = on ? 'On' : 'Off';
     btn.classList.toggle('on', on);
+  }
+  // Auto-check when turned on; uncheck when turned off
+  const chk = document.querySelector(`[data-check="${CSS.escape(key)}"]`);
+  if (chk) {
+    chk.checked = on;
+    markSelected();
   }
   refresh();
 }
