@@ -458,8 +458,10 @@ inject_provider_models_from_env() {
   CONFIG_JSON=$(jq \
     --arg provider "$provider" \
     --argjson models "$models_json" \
-    '.models.mode = "merge"
-     | .models.providers[$provider] = ((.models.providers[$provider] // {}) + {models: $models})' <<<"$CONFIG_JSON")
+    'if .models.providers[$provider] then
+       .models.mode = "merge"
+       | .models.providers[$provider].models = $models
+     else . end' <<<"$CONFIG_JSON")
 }
 
 # Built-in provider model envs (optional)
@@ -1419,6 +1421,9 @@ if [ -n "${HUGGINGCLAW_OPENCLAW_PLUGINS:-}" ]; then
     echo "ERROR: HUGGINGCLAW_OPENCLAW_PLUGINS install failed: ${HUGGINGCLAW_OPENCLAW_PLUGINS}" >&2
   fi
 fi
+
+# ── Fix config before running startup commands ──
+openclaw doctor --fix || true
 
 # ── Arbitrary startup commands from HF Variables/Secrets ──
 # Recommended: use one variable, HUGGINGCLAW_RUN, as a full bash script. If the
