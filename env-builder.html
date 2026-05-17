@@ -37,16 +37,16 @@
   --panel-w:   340px;
 }
 
-html { scroll-behavior: smooth; }
+html { scroll-behavior: smooth; height: 100%; }
 
 body {
   font-family: var(--sans);
   background: var(--bg);
   color: var(--text);
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  overflow-x: hidden;
 }
 
 /* ── Topbar ── */
@@ -330,6 +330,15 @@ body {
   letter-spacing: 1.2px;
   color: var(--text3);
 }
+.sec-count {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text3);
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1px 7px;
+}
 
 .sec-line {
   flex: 1;
@@ -339,8 +348,8 @@ body {
 
 .cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 9px;
 }
 
 /* ── ENV Card ── */
@@ -358,6 +367,22 @@ body {
 .env-card.selected {
   border-color: var(--amber-glow);
   background: linear-gradient(135deg, var(--bg2) 80%, rgba(245,166,35,.04));
+}
+
+/* Critical cards get a red left-border accent */
+.env-card:has(.badge-critical) {
+  border-left: 3px solid rgba(240,80,80,.4);
+}
+.env-card:has(.badge-critical):hover {
+  border-left-color: rgba(240,80,80,.7);
+}
+.env-card:has(.badge-critical).selected {
+  border-left-color: #f05f5f;
+}
+
+/* Credential cards get an amber left-border accent */
+.env-card:has(.badge-credential) {
+  border-left: 3px solid rgba(220,140,60,.3);
 }
 
 .card-top {
@@ -407,16 +432,46 @@ body {
   border-radius: 20px;
 }
 
-.badge-s {
-  background: rgba(240,95,95,.12);
-  color: var(--red);
-  border: 1px solid rgba(240,95,95,.25);
+/* critical — space breaks without this */
+.badge-critical {
+  background: rgba(240,80,80,.14);
+  color: #f05f5f;
+  border: 1px solid rgba(240,80,80,.3);
 }
 
-.badge-f {
-  background: rgba(61,214,140,.1);
-  color: var(--green);
-  border: 1px solid rgba(61,214,140,.2);
+/* credential — sensitive key / token */
+.badge-credential {
+  background: rgba(220,140,60,.13);
+  color: #e09040;
+  border: 1px solid rgba(220,140,60,.28);
+}
+
+/* feature — enables an optional feature */
+.badge-feature {
+  background: rgba(70,140,250,.12);
+  color: #5a9eff;
+  border: 1px solid rgba(70,140,250,.25);
+}
+
+/* optional — safe to change freely */
+.badge-optional {
+  background: rgba(61,214,140,.10);
+  color: #3dd68c;
+  border: 1px solid rgba(61,214,140,.22);
+}
+
+/* advanced — power-user, risky if wrong */
+.badge-advanced {
+  background: rgba(160,100,230,.12);
+  color: #b07ae0;
+  border: 1px solid rgba(160,100,230,.25);
+}
+
+/* build-time — needs HF Space rebuild */
+.badge-build {
+  background: rgba(240,185,60,.12);
+  color: #e0b030;
+  border: 1px solid rgba(240,185,60,.28);
 }
 
 /* ── Card inputs ── */
@@ -692,6 +747,56 @@ body {
   .sidebar-wrap { display: none; }
   .topbar-divider, .topbar-title { display: none; }
 }
+
+/* ── Tag Legend (collapsible) ── */
+.tag-legend {
+  margin-bottom: 14px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+.legend-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  outline: none;
+}
+.legend-summary::-webkit-details-marker { display: none; }
+.legend-chips { display: flex; gap: 5px; flex-wrap: wrap; flex: 1; }
+.legend-hint {
+  font-size: 10px;
+  color: var(--text3);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.tag-legend[open] .legend-hint { opacity: 0; }
+.legend-body {
+  padding: 8px 12px 10px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.legend-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--text2);
+}
+.legend-row .badge { flex-shrink: 0; width: 74px; text-align: center; }
+.legend-tip {
+  font-size: 9.5px;
+  color: var(--text3);
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
 </style>
 </head>
 
@@ -746,6 +851,29 @@ body {
 
       <!-- sections -->
       <div class="sections-scroll">
+        <!-- Tag Legend (compact collapsible) -->
+        <details class="tag-legend" id="tagLegend">
+          <summary class="legend-summary">
+            <span class="legend-chips">
+              <span class="badge badge-critical">critical</span>
+              <span class="badge badge-credential">credential</span>
+              <span class="badge badge-feature">feature</span>
+              <span class="badge badge-optional">optional</span>
+              <span class="badge badge-advanced">advanced</span>
+              <span class="badge badge-build">build-time</span>
+            </span>
+            <span class="legend-hint">what do these mean?</span>
+          </summary>
+          <div class="legend-body">
+            <div class="legend-row"><span class="badge badge-critical">critical</span><span>Space won't work without this</span></div>
+            <div class="legend-row"><span class="badge badge-credential">credential</span><span>Sensitive key or token — never share</span></div>
+            <div class="legend-row"><span class="badge badge-feature">feature</span><span>Enables a specific optional feature</span></div>
+            <div class="legend-row"><span class="badge badge-optional">optional</span><span>Safe to change — nothing breaks</span></div>
+            <div class="legend-row"><span class="badge badge-advanced">advanced</span><span>Power-user setting — wrong value causes issues</span></div>
+            <div class="legend-row"><span class="badge badge-build">build-time</span><span>Needs HF Space rebuild to fully take effect</span></div>
+            <div class="legend-tip">💡 Type a tag name in search to filter by it</div>
+          </div>
+        </details>
         <div id="sections"></div>
 
         <!-- Custom Env section -->
