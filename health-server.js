@@ -480,7 +480,6 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
     return res.end(JSON.stringify({ isPrivate: SPACE_IS_PRIVATE }));
   }
-  }
 
   if (pathname === "/health") {
     const gatewayReady = await probePort(GATEWAY_HOST, GATEWAY_PORT, "/health");
