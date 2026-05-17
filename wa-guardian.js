@@ -91,7 +91,7 @@ async function createConnection() {
           method: "connect",
           params: {
             minProtocol: 3,
-            maxProtocol: 3,
+            maxProtocol: 4,
             client: {
               id: "gateway-client",
               version: "1.0.0",

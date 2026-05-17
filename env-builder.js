@@ -416,7 +416,7 @@ const MODEL_CATALOGS = {
 };
 
 const FIELDS = [
-  {
+{
     "g": "Core",
     "icon": "⚡",
     "k": "LLM_MODEL",
@@ -424,248 +424,258 @@ const FIELDS = [
     "type": "model",
     "options_key": "LLM_MODEL",
     "ph": "choose a provider model",
-    "common": 1
+    "common": 1,
+    "tag": "critical"
   },
-  {
+{
     "g": "Core",
     "icon": "⚡",
     "k": "LLM_API_KEY",
     "lbl": "Primary provider API key",
     "type": "password",
-    "secret": 1,
     "ph": "sk-...",
-    "common": 1
+    "common": 1,
+    "tag": "credential"
   },
-  {
+{
     "g": "Core",
     "icon": "⚡",
     "k": "GATEWAY_TOKEN",
     "lbl": "Control UI gateway token",
     "type": "password",
-    "secret": 1,
-    "common": 1
+    "common": 1,
+    "tag": "critical"
   },
-  {
+{
     "g": "Core",
     "icon": "⚡",
     "k": "OPENCLAW_PASSWORD",
     "lbl": "Optional password auth",
     "type": "password",
-    "secret": 1
+    "tag": "credential"
   },
-  {
+{
     "g": "Core",
     "icon": "⚡",
     "k": "OPENCLAW_VERSION",
     "lbl": "Pin OpenClaw version",
     "type": "text",
-    "ph": "latest"
+    "ph": "latest",
+    "tag": "optional"
   },
-  {
-    "g": "Core",
+{
+    "g": "Plugins",
     "icon": "⚡",
     "k": "LLM_API_KEY_FALLBACK_ENABLED",
     "lbl": "Allow global LLM_API_KEY fallback",
     "type": "toggle",
-    "ph": "true"
+    "ph": "true",
+    "tag": "advanced"
   },
-  {
-    "g": "Core",
+{
+    "g": "Startup",
     "icon": "⚡",
     "k": "DEV_MODE",
     "lbl": "Enable dev mode",
     "type": "toggle",
     "ph": "false",
-    "common": 1
+    "common": 1,
+    "tag": "build"
   },
-  {
-    "g": "Core",
+{
+    "g": "Startup",
     "icon": "⚡",
     "k": "HUGGINGCLAW_JUPYTER_ENABLED",
     "lbl": "Enable Jupyter terminal",
     "type": "toggle",
     "ph": "false",
-    "common": 1
+    "common": 1,
+    "tag": "feature"
   },
-  {
-    "g": "Core",
+{
+    "g": "DevData",
     "icon": "⚡",
     "k": "DEVDATA",
     "lbl": "DevData switch",
     "type": "toggle",
     "ph": "on",
-    "common": 1
+    "common": 1,
+    "tag": "feature"
   },
-  {
-    "g": "Core",
+{
+    "g": "DevData",
     "icon": "⚡",
     "k": "DEVDATA_DATASET_NAME",
     "lbl": "DevData dataset name",
     "type": "text",
     "ph": "huggingclaw-devdata",
-    "common": 1
+    "common": 1,
+    "tag": "feature"
   },
-  {
-    "g": "Core",
+{
+    "g": "DevData",
     "icon": "⚡",
     "k": "DEVDATA_SYNC_INTERVAL",
     "lbl": "DevData sync interval (seconds)",
     "type": "number",
-    "ph": "180"
+    "ph": "180",
+    "tag": "advanced"
   },
-  {
-    "g": "Core",
+{
+    "g": "WhatsApp",
     "icon": "⚡",
     "k": "WHATSAPP_ENABLED",
     "lbl": "Enable WhatsApp pairing",
     "type": "toggle",
     "ph": "false",
-    "common": 1
+    "common": 1,
+    "tag": "feature"
   },
-  {
-    "g": "Core",
+{
+    "g": "Startup",
     "icon": "⚡",
     "k": "HUGGINGCLAW_CAPTURE_DISABLE",
     "lbl": "Disable capture wrapper",
     "type": "toggle",
-    "ph": "false"
+    "ph": "false",
+    "tag": "advanced"
   },
-  {
-    "g": "Core",
+{
+    "g": "Startup",
     "icon": "⚡",
     "k": "HUGGINGCLAW_STARTUP_STRICT",
     "lbl": "Stop on startup failure",
     "type": "toggle",
-    "ph": "false"
+    "ph": "false",
+    "tag": "advanced"
   },
-  {
-    "g": "Core",
+{
+    "g": "Startup",
     "icon": "⚡",
     "k": "HUGGINGCLAW_RUN",
     "lbl": "Startup command (one-liner)",
-    "type": "textarea"
+    "type": "textarea",
+    "tag": "optional"
   },
-  {
-    "g": "Core",
+{
+    "g": "Startup",
     "icon": "⚡",
     "k": "HUGGINGCLAW_STARTUP_COMMANDS",
     "lbl": "Multiline startup commands",
-    "type": "textarea"
+    "type": "textarea",
+    "tag": "optional"
   },
-  {
-    "g": "Core",
+{
+    "g": "Startup",
     "icon": "⚡",
     "k": "HUGGINGCLAW_STARTUP_SCRIPT",
     "lbl": "Startup shell script",
-    "type": "textarea"
+    "type": "textarea",
+    "tag": "optional"
   },
-  {
-    "g": "Core",
+{
+    "g": "Startup",
     "icon": "⚡",
     "k": "HUGGINGCLAW_STARTUP_SCRIPT_B64",
     "lbl": "Startup script (base64)",
-    "type": "textarea"
+    "type": "textarea",
+    "tag": "optional"
   },
-  {
-    "g": "Core",
+{
+    "g": "Startup",
     "icon": "⚡",
     "k": "HUGGINGCLAW_APT_PACKAGES",
     "lbl": "APT packages to install",
-    "type": "textarea"
+    "type": "textarea",
+    "tag": "optional"
   },
-  {
-    "g": "Core",
+{
+    "g": "Startup",
     "icon": "⚡",
     "k": "HUGGINGCLAW_PIP_PACKAGES",
     "lbl": "Pip packages to install",
-    "type": "textarea"
+    "type": "textarea",
+    "tag": "optional"
   },
-  {
-    "g": "Core",
+{
+    "g": "Startup",
     "icon": "⚡",
     "k": "HUGGINGCLAW_NPM_PACKAGES",
     "lbl": "NPM packages to install",
-    "type": "textarea"
+    "type": "textarea",
+    "tag": "optional"
   },
-  {
-    "g": "Core",
+{
+    "g": "Startup",
     "icon": "⚡",
     "k": "HUGGINGCLAW_OPENCLAW_PLUGINS",
     "lbl": "OpenClaw plugins to load",
-    "type": "textarea"
+    "type": "textarea",
+    "tag": "optional"
   },
-  {
-    "g": "Core",
+{
+    "g": "Network",
     "icon": "⚡",
     "k": "ALLOWED_ORIGINS",
     "lbl": "Allowed CORS origins",
-    "type": "textarea"
+    "type": "textarea",
+    "tag": "advanced"
   },
-  {
-    "g": "Core",
+{
+    "g": "Network",
     "icon": "⚡",
     "k": "TRUSTED_PROXIES",
     "lbl": "Trusted proxy CIDRs",
-    "type": "textarea"
+    "type": "textarea",
+    "tag": "advanced"
   },
-  {
-    "g": "Core",
+{
+    "g": "Network",
     "icon": "⚡",
     "k": "WEBHOOK_URL",
     "lbl": "Webhook URL",
     "type": "text",
-    "ph": "https://..."
+    "ph": "https://...",
+    "tag": "feature"
   },
-  {
-    "g": "Core",
-    "icon": "⚡",
-    "k": "WS_MIN_PROTOCOL",
-    "lbl": "Min WebSocket protocol",
-    "type": "number",
-    "ph": "1"
-  },
-  {
-    "g": "Core",
-    "icon": "⚡",
-    "k": "WS_MAX_PROTOCOL",
-    "lbl": "Max WebSocket protocol",
-    "type": "number",
-    "ph": "5"
-  },
-  {
-    "g": "Core",
+{
+    "g": "Gateway",
     "icon": "⚡",
     "k": "GATEWAY_MAX_RESTARTS",
     "lbl": "Gateway max restarts",
     "type": "number",
-    "ph": "10"
+    "ph": "10",
+    "tag": "advanced"
   },
-  {
-    "g": "Core",
+{
+    "g": "Gateway",
     "icon": "⚡",
     "k": "GATEWAY_READY_TIMEOUT",
     "lbl": "Gateway ready timeout",
     "type": "number",
-    "ph": "90"
+    "ph": "90",
+    "tag": "advanced"
   },
-  {
-    "g": "Core",
+{
+    "g": "Gateway",
     "icon": "⚡",
     "k": "GATEWAY_RESTART_DELAY",
     "lbl": "Gateway restart delay",
     "type": "number",
-    "ph": "5"
+    "ph": "5",
+    "tag": "advanced"
   },
-  {
-    "g": "Core",
+{
+    "g": "Gateway",
     "icon": "⚡",
     "k": "GATEWAY_VERBOSE",
     "lbl": "Verbose gateway logs",
     "type": "toggle",
-    "ph": "false"
+    "ph": "false",
+    "tag": "advanced"
   },
-  {
-    "g": "Core",
+{
+    "g": "Logging",
     "icon": "⚡",
     "k": "OPENCLAW_CONSOLE_LOG_LEVEL",
     "lbl": "Console log level",
@@ -676,10 +686,11 @@ const FIELDS = [
       "warn",
       "error"
     ],
-    "ph": "info"
+    "ph": "info",
+    "tag": "optional"
   },
-  {
-    "g": "Core",
+{
+    "g": "Logging",
     "icon": "⚡",
     "k": "OPENCLAW_FILE_LOG_LEVEL",
     "lbl": "File log level",
@@ -690,10 +701,11 @@ const FIELDS = [
       "warn",
       "error"
     ],
-    "ph": "info"
+    "ph": "info",
+    "tag": "optional"
   },
-  {
-    "g": "Core",
+{
+    "g": "Logging",
     "icon": "⚡",
     "k": "OPENCLAW_CONSOLE_LOG_STYLE",
     "lbl": "Console log style",
@@ -703,10 +715,11 @@ const FIELDS = [
       "json",
       "compact"
     ],
-    "ph": "pretty"
+    "ph": "pretty",
+    "tag": "optional"
   },
-  {
-    "g": "Core",
+{
+    "g": "Plugins",
     "icon": "⚡",
     "k": "BROWSER_PLUGIN_MODE",
     "lbl": "Browser plugin mode",
@@ -716,10 +729,11 @@ const FIELDS = [
       "enabled",
       "disabled"
     ],
-    "ph": "auto"
+    "ph": "auto",
+    "tag": "feature"
   },
-  {
-    "g": "Core",
+{
+    "g": "Plugins",
     "icon": "⚡",
     "k": "ACP_PLUGIN_MODE",
     "lbl": "ACP plugin mode",
@@ -729,912 +743,985 @@ const FIELDS = [
       "enabled",
       "disabled"
     ],
-    "ph": "auto"
+    "ph": "auto",
+    "tag": "feature"
   },
-  {
-    "g": "Core",
+{
+    "g": "Cloudflare",
     "icon": "⚡",
     "k": "CLOUDFLARE_PROXY_DEBUG",
     "lbl": "Cloudflare proxy debug",
     "type": "toggle",
-    "ph": "false"
+    "ph": "false",
+    "tag": "advanced"
   },
-  {
-    "g": "Core",
+{
+    "g": "Cloudflare",
     "icon": "⚡",
     "k": "CLOUDFLARE_KEEPALIVE_ENABLED",
     "lbl": "Enable keep-awake worker",
     "type": "toggle",
-    "ph": "true"
+    "ph": "true",
+    "tag": "feature"
   },
-  {
-    "g": "Core",
+{
+    "g": "Cloudflare",
     "icon": "⚡",
     "k": "CLOUDFLARE_PROXY_URL",
     "lbl": "Proxy worker URL",
     "type": "text",
     "ph": "https://your-proxy.workers.dev",
-    "common": 1
+    "common": 1,
+    "tag": "feature"
   },
-  {
-    "g": "Core",
+{
+    "g": "Cloudflare",
     "icon": "⚡",
     "k": "CLOUDFLARE_PROXY_SECRET",
     "lbl": "Proxy shared secret",
     "type": "password",
-    "secret": 1
+    "tag": "credential"
   },
-  {
-    "g": "Core",
+{
+    "g": "Cloudflare",
     "icon": "⚡",
     "k": "CLOUDFLARE_PROXY_DOMAINS",
     "lbl": "Extra domains to proxy",
     "type": "textarea",
-    "ph": "api.sendgrid.com,slack.com"
+    "ph": "api.sendgrid.com,slack.com",
+    "tag": "advanced"
   },
-  {
-    "g": "Core",
+{
+    "g": "Cloudflare",
     "icon": "⚡",
     "k": "CLOUDFLARE_WORKERS_TOKEN",
     "lbl": "Workers API token",
     "type": "password",
-    "secret": 1,
-    "common": 1
+    "common": 1,
+    "tag": "credential"
   },
-  {
+{
     "g": "Core",
     "icon": "⚡",
     "k": "HF_USERNAME",
     "lbl": "Hugging Face username",
     "type": "text",
-    "common": 1
+    "common": 1,
+    "tag": "optional"
   },
-  {
+{
     "g": "Core",
     "icon": "⚡",
     "k": "HF_TOKEN",
     "lbl": "HF write token",
     "type": "password",
-    "secret": 1,
-    "common": 1
+    "common": 1,
+    "tag": "credential"
   },
-  {
+{
     "g": "Core",
     "icon": "⚡",
     "k": "BACKUP_DATASET_NAME",
     "lbl": "Backup dataset name",
     "type": "text",
     "ph": "huggingclaw-backup",
-    "common": 1
+    "common": 1,
+    "tag": "optional"
   },
-  {
+{
     "g": "Core",
     "icon": "⚡",
     "k": "SYNC_INTERVAL",
     "lbl": "Sync interval (seconds)",
     "type": "number",
     "ph": "180",
-    "common": 1
+    "common": 1,
+    "tag": "advanced"
   },
-  {
+{
     "g": "Core",
     "icon": "⚡",
     "k": "JUPYTER_TOKEN",
     "lbl": "Jupyter access token",
     "type": "password",
-    "secret": 1,
     "ph": "huggingface",
-    "common": 1
+    "common": 1,
+    "tag": "credential"
   },
-  {
+{
     "g": "Core",
     "icon": "⚡",
     "k": "KEEP_ALIVE_INTERVAL",
     "lbl": "Keep-alive ping interval (seconds)",
     "type": "number",
     "ph": "300",
-    "common": 1
+    "common": 1,
+    "tag": "advanced"
   },
-  {
+{
     "g": "Core",
     "icon": "⚡",
     "k": "OPENCLAW_DISABLE_BONJOUR",
     "lbl": "Disable Bonjour/mDNS discovery",
     "type": "toggle",
-    "ph": "false"
+    "ph": "false",
+    "tag": "advanced"
   },
-  {
+{
     "g": "Core",
     "icon": "⚡",
     "k": "OPENCLAW_RUNTIME_VERSION",
     "lbl": "Pin runtime version",
     "type": "text",
-    "ph": "latest"
+    "ph": "latest",
+    "tag": "advanced"
   },
-  {
+{
     "g": "Core",
     "icon": "⚡",
     "k": "OPENCLAW_DISPLAY_VERSION",
     "lbl": "Display version label",
     "type": "text",
-    "ph": ""
+    "ph": "",
+    "tag": "optional"
   },
-  {
+{
     "g": "Integrations",
     "icon": "🔌",
     "k": "CLOUDFLARE_ACCOUNT_ID",
     "lbl": "Cloudflare account ID",
     "type": "text",
-    "ph": "account-id"
+    "ph": "account-id",
+    "tag": "feature"
   },
-  {
+{
     "g": "Integrations",
     "icon": "🔌",
     "k": "CLOUDFLARE_WORKER_NAME",
     "lbl": "Outbound proxy worker name",
     "type": "text",
-    "ph": "huggingclaw-proxy"
+    "ph": "huggingclaw-proxy",
+    "tag": "feature"
   },
-  {
+{
     "g": "Integrations",
     "icon": "🔌",
     "k": "CLOUDFLARE_KEEPALIVE_URL",
     "lbl": "Keepalive worker URL",
     "type": "text",
-    "ph": "https://your-worker.workers.dev"
+    "ph": "https://your-worker.workers.dev",
+    "tag": "feature"
   },
-  {
+{
     "g": "Integrations",
     "icon": "🔌",
     "k": "CLOUDFLARE_KEEPALIVE_WORKER_NAME",
     "lbl": "Keepalive worker name",
     "type": "text",
-    "ph": "huggingclaw-keepalive"
+    "ph": "huggingclaw-keepalive",
+    "tag": "feature"
   },
-  {
+{
     "g": "Integrations",
     "icon": "🔌",
     "k": "CLOUDFLARE_KEEPALIVE_CRON",
     "lbl": "Keepalive cron schedule",
     "type": "text",
-    "ph": "*/5 * * * *"
+    "ph": "*/5 * * * *",
+    "tag": "advanced"
   },
-  {
+{
     "g": "Integrations",
     "icon": "🔌",
     "k": "TELEGRAM_API_ROOT",
     "lbl": "Telegram API root override",
     "type": "text",
-    "ph": "https://api.telegram.org"
+    "ph": "https://api.telegram.org",
+    "tag": "advanced"
   },
-  {
+{
     "g": "Runtime",
     "icon": "⚙️",
     "k": "OPENCLAW_CONFIG_WATCH_INTERVAL",
     "lbl": "Config watch interval (seconds)",
     "type": "number",
-    "ph": "1"
+    "ph": "1",
+    "tag": "advanced"
   },
-  {
+{
     "g": "Runtime",
     "icon": "⚙️",
     "k": "OPENCLAW_CONFIG_SETTLE_SECONDS",
     "lbl": "Config settle window (seconds)",
     "type": "number",
-    "ph": "3"
+    "ph": "3",
+    "tag": "advanced"
   },
-  {
+{
     "g": "Runtime",
     "icon": "⚙️",
     "k": "JUPYTER_ROOT_DIR",
     "lbl": "Jupyter root directory",
     "type": "text",
-    "ph": "/home/node"
+    "ph": "/home/node",
+    "tag": "advanced"
   },
-  {
+{
     "g": "Backup",
     "icon": "💾",
     "k": "WORKSPACE_GIT_USER",
     "lbl": "Workspace git author email",
     "type": "text",
-    "ph": "openclaw@example.com"
+    "ph": "openclaw@example.com",
+    "tag": "optional"
   },
-  {
+{
     "g": "Backup",
     "icon": "💾",
     "k": "WORKSPACE_GIT_NAME",
     "lbl": "Workspace git author name",
     "type": "text",
-    "ph": "OpenClaw Bot"
+    "ph": "OpenClaw Bot",
+    "tag": "optional"
   },
-  {
+{
     "g": "Provider Keys",
     "icon": "🔑",
     "k": "ANTHROPIC_API_KEY",
     "lbl": "Anthropic (Claude)",
     "type": "password",
-    "secret": 1,
-    "common": 0
+    "common": 0,
+    "tag": "credential"
   },
-  {
+{
     "g": "Provider Keys",
     "icon": "🔑",
     "k": "OPENAI_API_KEY",
     "lbl": "OpenAI (GPT)",
     "type": "password",
-    "secret": 1,
-    "common": 0
+    "common": 0,
+    "tag": "credential"
   },
-  {
+{
     "g": "Provider Keys",
     "icon": "🔑",
     "k": "GOOGLE_API_KEY",
     "lbl": "Google AI Studio",
     "type": "password",
-    "secret": 1,
-    "common": 0
+    "common": 0,
+    "tag": "credential"
   },
-  {
+{
     "g": "Provider Keys",
     "icon": "🔑",
     "k": "GEMINI_API_KEY",
     "lbl": "Google Gemini",
     "type": "password",
-    "secret": 1,
-    "common": 0
+    "common": 0,
+    "tag": "credential"
   },
-  {
+{
     "g": "Provider Keys",
     "icon": "🔑",
     "k": "DEEPSEEK_API_KEY",
     "lbl": "DeepSeek",
     "type": "password",
-    "secret": 1,
-    "common": 0
+    "common": 0,
+    "tag": "credential"
   },
-  {
+{
     "g": "Provider Keys",
     "icon": "🔑",
     "k": "OPENROUTER_API_KEY",
     "lbl": "OpenRouter",
     "type": "password",
-    "secret": 1,
-    "common": 1
+    "common": 1,
+    "tag": "credential"
   },
-  {
+{
     "g": "Provider Keys",
     "icon": "🔑",
     "k": "OPENCODE_API_KEY",
     "lbl": "OpenCode",
     "type": "password",
-    "secret": 1,
-    "common": 0
+    "common": 0,
+    "tag": "credential"
   },
-  {
+{
     "g": "Provider Keys",
     "icon": "🔑",
     "k": "KILOCODE_API_KEY",
     "lbl": "KiloCode",
     "type": "password",
-    "secret": 1,
-    "common": 0
+    "common": 0,
+    "tag": "credential"
   },
-  {
+{
     "g": "Provider Keys",
     "icon": "🔑",
     "k": "ZAI_API_KEY",
     "lbl": "Z.ai / GLM",
     "type": "password",
-    "secret": 1,
-    "common": 0
+    "common": 0,
+    "tag": "credential"
   },
-  {
+{
     "g": "Provider Keys",
     "icon": "🔑",
     "k": "MOONSHOT_API_KEY",
     "lbl": "Moonshot / Kimi",
     "type": "password",
-    "secret": 1,
-    "common": 0
+    "common": 0,
+    "tag": "credential"
   },
-  {
+{
     "g": "Provider Keys",
     "icon": "🔑",
     "k": "MINIMAX_API_KEY",
     "lbl": "MiniMax",
     "type": "password",
-    "secret": 1,
-    "common": 0
+    "common": 0,
+    "tag": "credential"
   },
-  {
+{
     "g": "Provider Keys",
     "icon": "🔑",
     "k": "XIAOMI_API_KEY",
     "lbl": "Xiaomi / MiMo",
     "type": "password",
-    "secret": 1,
-    "common": 0
+    "common": 0,
+    "tag": "credential"
   },
-  {
+{
     "g": "Provider Keys",
     "icon": "🔑",
     "k": "VOLCANO_ENGINE_API_KEY",
     "lbl": "Volcengine / Doubao",
     "type": "password",
-    "secret": 1,
-    "common": 0
+    "common": 0,
+    "tag": "credential"
   },
-  {
+{
     "g": "Provider Keys",
     "icon": "🔑",
     "k": "BYTEPLUS_API_KEY",
     "lbl": "BytePlus",
     "type": "password",
-    "secret": 1,
-    "common": 0
+    "common": 0,
+    "tag": "credential"
   },
-  {
+{
     "g": "Provider Keys",
     "icon": "🔑",
     "k": "MISTRAL_API_KEY",
     "lbl": "Mistral",
     "type": "password",
-    "secret": 1,
-    "common": 0
+    "common": 0,
+    "tag": "credential"
   },
-  {
+{
     "g": "Provider Keys",
     "icon": "🔑",
     "k": "XAI_API_KEY",
     "lbl": "xAI (Grok)",
     "type": "password",
-    "secret": 1,
-    "common": 0
+    "common": 0,
+    "tag": "credential"
   },
-  {
+{
     "g": "Provider Keys",
     "icon": "🔑",
     "k": "NVIDIA_API_KEY",
     "lbl": "NVIDIA",
     "type": "password",
-    "secret": 1,
-    "common": 0
+    "common": 0,
+    "tag": "credential"
   },
-  {
+{
     "g": "Provider Keys",
     "icon": "🔑",
     "k": "GROQ_API_KEY",
     "lbl": "Groq",
     "type": "password",
-    "secret": 1,
-    "common": 0
+    "common": 0,
+    "tag": "credential"
   },
-  {
+{
     "g": "Provider Keys",
     "icon": "🔑",
     "k": "COHERE_API_KEY",
     "lbl": "Cohere",
     "type": "password",
-    "secret": 1,
-    "common": 0
+    "common": 0,
+    "tag": "credential"
   },
-  {
+{
     "g": "Provider Keys",
     "icon": "🔑",
     "k": "TOGETHER_API_KEY",
     "lbl": "Together AI",
     "type": "password",
-    "secret": 1,
-    "common": 0
+    "common": 0,
+    "tag": "credential"
   },
-  {
+{
     "g": "Provider Keys",
     "icon": "🔑",
     "k": "CEREBRAS_API_KEY",
     "lbl": "Cerebras",
     "type": "password",
-    "secret": 1,
-    "common": 0
+    "common": 0,
+    "tag": "credential"
   },
-  {
+{
     "g": "Provider Keys",
     "icon": "🔑",
     "k": "QIANFAN_API_KEY",
     "lbl": "Qianfan",
     "type": "password",
-    "secret": 1,
-    "common": 0
+    "common": 0,
+    "tag": "credential"
   },
-  {
+{
     "g": "Provider Keys",
     "icon": "🔑",
     "k": "MODELSTUDIO_API_KEY",
     "lbl": "ModelStudio",
     "type": "password",
-    "secret": 1,
-    "common": 0
+    "common": 0,
+    "tag": "credential"
   },
-  {
+{
     "g": "Provider Keys",
     "icon": "🔑",
     "k": "KIMI_API_KEY",
     "lbl": "Kimi",
     "type": "password",
-    "secret": 1,
-    "common": 0
+    "common": 0,
+    "tag": "credential"
   },
-  {
+{
     "g": "Provider Keys",
     "icon": "🔑",
     "k": "HUGGINGFACE_HUB_TOKEN",
     "lbl": "Hugging Face token",
     "type": "password",
-    "secret": 1,
-    "common": 0
+    "common": 0,
+    "tag": "credential"
   },
-  {
+{
     "g": "Provider Keys",
     "icon": "🔑",
     "k": "COPILOT_GITHUB_TOKEN",
     "lbl": "GitHub Copilot",
     "type": "password",
-    "secret": 1,
-    "common": 0
+    "common": 0,
+    "tag": "credential"
   },
-  {
+{
     "g": "Provider Keys",
     "icon": "🔑",
     "k": "VENICE_API_KEY",
     "lbl": "Venice",
     "type": "password",
-    "secret": 1,
-    "common": 0
+    "common": 0,
+    "tag": "credential"
   },
-  {
+{
     "g": "Provider Keys",
     "icon": "🔑",
     "k": "SYNTHETIC_API_KEY",
     "lbl": "Synthetic",
     "type": "password",
-    "secret": 1,
-    "common": 0
+    "common": 0,
+    "tag": "credential"
   },
-  {
+{
     "g": "Provider Keys",
     "icon": "🔑",
     "k": "AI_GATEWAY_API_KEY",
     "lbl": "AI Gateway",
     "type": "password",
-    "secret": 1,
-    "common": 0
+    "common": 0,
+    "tag": "credential"
   },
-  {
+{
     "g": "Provider Keys",
     "icon": "🔑",
     "k": "CLOUDFLARE_API_TOKEN",
     "lbl": "Cloudflare API token",
     "type": "password",
-    "secret": 1,
-    "common": 0
+    "common": 0,
+    "tag": "credential"
   },
-  {
+{
     "g": "Rotation Pools",
     "icon": "🔄",
     "k": "ANTHROPIC_API_KEYS",
     "lbl": "Anthropic pool (comma-sep)",
-    "type": "text"
+    "type": "text",
+    "tag": "advanced"
   },
-  {
+{
     "g": "Rotation Pools",
     "icon": "🔄",
     "k": "OPENAI_API_KEYS",
     "lbl": "OpenAI pool",
-    "type": "text"
+    "type": "text",
+    "tag": "advanced"
   },
-  {
+{
     "g": "Rotation Pools",
     "icon": "🔄",
     "k": "GEMINI_API_KEYS",
     "lbl": "Gemini pool",
-    "type": "text"
+    "type": "text",
+    "tag": "advanced"
   },
-  {
+{
     "g": "Rotation Pools",
     "icon": "🔄",
     "k": "GOOGLE_API_KEYS",
     "lbl": "Google pool",
-    "type": "text"
+    "type": "text",
+    "tag": "advanced"
   },
-  {
+{
     "g": "Rotation Pools",
     "icon": "🔄",
     "k": "DEEPSEEK_API_KEYS",
     "lbl": "DeepSeek pool",
-    "type": "text"
+    "type": "text",
+    "tag": "advanced"
   },
-  {
+{
     "g": "Rotation Pools",
     "icon": "🔄",
     "k": "OPENROUTER_API_KEYS",
     "lbl": "OpenRouter pool",
-    "type": "text"
+    "type": "text",
+    "tag": "advanced"
   },
-  {
+{
     "g": "Rotation Pools",
     "icon": "🔄",
     "k": "OPENCODE_API_KEYS",
     "lbl": "OpenCode pool",
-    "type": "text"
+    "type": "text",
+    "tag": "advanced"
   },
-  {
+{
     "g": "Rotation Pools",
     "icon": "🔄",
     "k": "KILOCODE_API_KEYS",
     "lbl": "KiloCode pool",
-    "type": "text"
+    "type": "text",
+    "tag": "advanced"
   },
-  {
+{
     "g": "Rotation Pools",
     "icon": "🔄",
     "k": "ZAI_API_KEYS",
     "lbl": "Z.ai / GLM pool",
-    "type": "text"
+    "type": "text",
+    "tag": "advanced"
   },
-  {
+{
     "g": "Rotation Pools",
     "icon": "🔄",
     "k": "MOONSHOT_API_KEYS",
     "lbl": "Moonshot / Kimi pool",
-    "type": "text"
+    "type": "text",
+    "tag": "advanced"
   },
-  {
+{
     "g": "Rotation Pools",
     "icon": "🔄",
     "k": "MINIMAX_API_KEYS",
     "lbl": "MiniMax pool",
-    "type": "text"
+    "type": "text",
+    "tag": "advanced"
   },
-  {
+{
     "g": "Rotation Pools",
     "icon": "🔄",
     "k": "XIAOMI_API_KEYS",
     "lbl": "Xiaomi pool",
-    "type": "text"
+    "type": "text",
+    "tag": "advanced"
   },
-  {
+{
     "g": "Rotation Pools",
     "icon": "🔄",
     "k": "VOLCANO_ENGINE_API_KEYS",
     "lbl": "Volcano Engine pool",
-    "type": "text"
+    "type": "text",
+    "tag": "advanced"
   },
-  {
+{
     "g": "Rotation Pools",
     "icon": "🔄",
     "k": "BYTEPLUS_API_KEYS",
     "lbl": "BytePlus pool",
-    "type": "text"
+    "type": "text",
+    "tag": "advanced"
   },
-  {
+{
     "g": "Rotation Pools",
     "icon": "🔄",
     "k": "MISTRAL_API_KEYS",
     "lbl": "Mistral pool",
-    "type": "text"
+    "type": "text",
+    "tag": "advanced"
   },
-  {
+{
     "g": "Rotation Pools",
     "icon": "🔄",
     "k": "XAI_API_KEYS",
     "lbl": "xAI pool",
-    "type": "text"
+    "type": "text",
+    "tag": "advanced"
   },
-  {
+{
     "g": "Rotation Pools",
     "icon": "🔄",
     "k": "NVIDIA_API_KEYS",
     "lbl": "NVIDIA pool",
-    "type": "text"
+    "type": "text",
+    "tag": "advanced"
   },
-  {
+{
     "g": "Rotation Pools",
     "icon": "🔄",
     "k": "GROQ_API_KEYS",
     "lbl": "Groq pool",
-    "type": "text"
+    "type": "text",
+    "tag": "advanced"
   },
-  {
+{
     "g": "Rotation Pools",
     "icon": "🔄",
     "k": "COHERE_API_KEYS",
     "lbl": "Cohere pool",
-    "type": "text"
+    "type": "text",
+    "tag": "advanced"
   },
-  {
+{
     "g": "Rotation Pools",
     "icon": "🔄",
     "k": "TOGETHER_API_KEYS",
     "lbl": "Together pool",
-    "type": "text"
+    "type": "text",
+    "tag": "advanced"
   },
-  {
+{
     "g": "Rotation Pools",
     "icon": "🔄",
     "k": "CEREBRAS_API_KEYS",
     "lbl": "Cerebras pool",
-    "type": "text"
+    "type": "text",
+    "tag": "advanced"
   },
-  {
+{
     "g": "Rotation Pools",
     "icon": "🔄",
     "k": "HUGGINGFACE_HUB_TOKENS",
     "lbl": "HF token pool",
     "type": "text"
   },
-  {
+{
     "g": "Model Lists",
     "icon": "📋",
     "k": "OPENAI_MODELS",
     "lbl": "Visible OpenAI models",
     "type": "model_list",
     "options_key": "OPENAI_MODELS",
-    "ph": "Select models to build a comma list"
+    "ph": "Select models to build a comma list",
+    "tag": "optional"
   },
-  {
+{
     "g": "Model Lists",
     "icon": "📋",
     "k": "ANTHROPIC_MODELS",
     "lbl": "Visible Anthropic models",
     "type": "model_list",
     "options_key": "ANTHROPIC_MODELS",
-    "ph": "Select models to build a comma list"
+    "ph": "Select models to build a comma list",
+    "tag": "optional"
   },
-  {
+{
     "g": "Model Lists",
     "icon": "📋",
     "k": "GEMINI_MODELS",
     "lbl": "Visible Gemini models",
     "type": "model_list",
     "options_key": "GEMINI_MODELS",
-    "ph": "Select models to build a comma list"
+    "ph": "Select models to build a comma list",
+    "tag": "optional"
   },
-  {
+{
     "g": "Model Lists",
     "icon": "📋",
     "k": "DEEPSEEK_MODELS",
     "lbl": "Visible DeepSeek models",
     "type": "model_list",
     "options_key": "DEEPSEEK_MODELS",
-    "ph": "Select models to build a comma list"
+    "ph": "Select models to build a comma list",
+    "tag": "optional"
   },
-  {
+{
     "g": "Model Lists",
     "icon": "📋",
     "k": "OPENROUTER_MODELS",
     "lbl": "Visible OpenRouter models",
     "type": "model_list",
     "options_key": "OPENROUTER_MODELS",
-    "ph": "Select models to build a comma list"
+    "ph": "Select models to build a comma list",
+    "tag": "optional"
   },
-  {
+{
     "g": "Model Lists",
     "icon": "📋",
     "k": "GROQ_MODELS",
     "lbl": "Visible Groq models",
     "type": "model_list",
     "options_key": "GROQ_MODELS",
-    "ph": "Select models to build a comma list"
+    "ph": "Select models to build a comma list",
+    "tag": "optional"
   },
-  {
+{
     "g": "Model Lists",
     "icon": "📋",
     "k": "MISTRAL_MODELS",
     "lbl": "Visible Mistral models",
     "type": "model_list",
     "options_key": "MISTRAL_MODELS",
-    "ph": "Select models to build a comma list"
+    "ph": "Select models to build a comma list",
+    "tag": "optional"
   },
-  {
+{
     "g": "Model Lists",
     "icon": "📋",
     "k": "XAI_MODELS",
     "lbl": "Visible xAI models",
     "type": "model_list",
     "options_key": "XAI_MODELS",
-    "ph": "Select models to build a comma list"
+    "ph": "Select models to build a comma list",
+    "tag": "optional"
   },
-  {
+{
     "g": "Model Lists",
     "icon": "📋",
     "k": "COHERE_MODELS",
     "lbl": "Visible Cohere models",
     "type": "model_list",
     "options_key": "COHERE_MODELS",
-    "ph": "Select models to build a comma list"
+    "ph": "Select models to build a comma list",
+    "tag": "optional"
   },
-  {
+{
     "g": "Model Lists",
     "icon": "📋",
     "k": "TOGETHER_MODELS",
     "lbl": "Visible Together models",
     "type": "model_list",
     "options_key": "TOGETHER_MODELS",
-    "ph": "Select models to build a comma list"
+    "ph": "Select models to build a comma list",
+    "tag": "optional"
   },
-  {
+{
     "g": "Model Lists",
     "icon": "📋",
     "k": "CEREBRAS_MODELS",
     "lbl": "Visible Cerebras models",
     "type": "model_list",
     "options_key": "CEREBRAS_MODELS",
-    "ph": "Select models to build a comma list"
+    "ph": "Select models to build a comma list",
+    "tag": "optional"
   },
-  {
+{
     "g": "Model Lists",
     "icon": "📋",
     "k": "NVIDIA_MODELS",
     "lbl": "Visible NVIDIA models",
     "type": "model_list",
     "options_key": "NVIDIA_MODELS",
-    "ph": "Select models to build a comma list"
+    "ph": "Select models to build a comma list",
+    "tag": "optional"
   },
-  {
+{
     "g": "Model Lists",
     "icon": "📋",
     "k": "KILOCODE_MODELS",
     "lbl": "Visible KiloCode models",
     "type": "model_list",
     "options_key": "KILOCODE_MODELS",
-    "ph": "Select models to build a comma list"
+    "ph": "Select models to build a comma list",
+    "tag": "optional"
   },
-  {
+{
     "g": "Model Lists",
     "icon": "📋",
     "k": "OPENCODE_MODELS",
     "lbl": "Visible OpenCode models",
     "type": "model_list",
     "options_key": "OPENCODE_MODELS",
-    "ph": "Select models to build a comma list"
+    "ph": "Select models to build a comma list",
+    "tag": "optional"
   },
-  {
+{
     "g": "Model Lists",
     "icon": "📋",
     "k": "ZAI_MODELS",
     "lbl": "Visible Z.ai / GLM models",
     "type": "model_list",
     "options_key": "ZAI_MODELS",
-    "ph": "Select models to build a comma list"
+    "ph": "Select models to build a comma list",
+    "tag": "optional"
   },
-  {
+{
     "g": "Model Lists",
     "icon": "📋",
     "k": "MOONSHOT_MODELS",
     "lbl": "Visible Moonshot / Kimi models",
     "type": "model_list",
     "options_key": "MOONSHOT_MODELS",
-    "ph": "Select models to build a comma list"
+    "ph": "Select models to build a comma list",
+    "tag": "optional"
   },
-  {
+{
     "g": "Model Lists",
     "icon": "📋",
     "k": "MINIMAX_MODELS",
     "lbl": "Visible MiniMax models",
     "type": "model_list",
     "options_key": "MINIMAX_MODELS",
-    "ph": "Select models to build a comma list"
+    "ph": "Select models to build a comma list",
+    "tag": "optional"
   },
-  {
+{
     "g": "Model Lists",
     "icon": "📋",
     "k": "XIAOMI_MODELS",
     "lbl": "Visible Xiaomi models",
     "type": "model_list",
     "options_key": "XIAOMI_MODELS",
-    "ph": "Select models to build a comma list"
+    "ph": "Select models to build a comma list",
+    "tag": "optional"
   },
-  {
+{
     "g": "Model Lists",
     "icon": "📋",
     "k": "VOLCANO_ENGINE_MODELS",
     "lbl": "Visible Volcano Engine models",
     "type": "model_list",
     "options_key": "VOLCANO_ENGINE_MODELS",
-    "ph": "Select models to build a comma list"
+    "ph": "Select models to build a comma list",
+    "tag": "optional"
   },
-  {
+{
     "g": "Model Lists",
     "icon": "📋",
     "k": "BYTEPLUS_MODELS",
     "lbl": "Visible BytePlus models",
     "type": "model_list",
     "options_key": "BYTEPLUS_MODELS",
-    "ph": "Select models to build a comma list"
+    "ph": "Select models to build a comma list",
+    "tag": "optional"
   },
-  {
+{
     "g": "Model Lists",
     "icon": "📋",
     "k": "QIANFAN_MODELS",
     "lbl": "Visible Qianfan models",
     "type": "model_list",
     "options_key": "QIANFAN_MODELS",
-    "ph": "Select models to build a comma list"
+    "ph": "Select models to build a comma list",
+    "tag": "optional"
   },
-  {
+{
     "g": "Model Lists",
     "icon": "📋",
     "k": "MODELSTUDIO_MODELS",
     "lbl": "Visible ModelStudio models",
     "type": "model_list",
     "options_key": "MODELSTUDIO_MODELS",
-    "ph": "Select models to build a comma list"
+    "ph": "Select models to build a comma list",
+    "tag": "optional"
   },
-  {
+{
     "g": "Model Lists",
     "icon": "📋",
     "k": "KIMI_MODELS",
     "lbl": "Visible Kimi models",
     "type": "model_list",
     "options_key": "KIMI_MODELS",
-    "ph": "Select models to build a comma list"
+    "ph": "Select models to build a comma list",
+    "tag": "optional"
   },
-  {
+{
     "g": "Model Lists",
     "icon": "📋",
     "k": "HUGGINGFACE_MODELS",
     "lbl": "Visible Hugging Face models",
     "type": "model_list",
     "options_key": "HUGGINGFACE_MODELS",
-    "ph": "Select models to build a comma list"
+    "ph": "Select models to build a comma list",
+    "tag": "optional"
   },
-  {
+{
     "g": "Model Lists",
     "icon": "📋",
     "k": "GITHUB_COPILOT_MODELS",
     "lbl": "Visible GitHub Copilot models",
     "type": "model_list",
     "options_key": "GITHUB_COPILOT_MODELS",
-    "ph": "Select models to build a comma list"
+    "ph": "Select models to build a comma list",
+    "tag": "optional"
   },
-  {
+{
     "g": "Custom Provider",
     "icon": "🔌",
     "k": "CUSTOM_PROVIDER_NAME",
     "lbl": "Provider display name",
-    "type": "text"
+    "type": "text",
+    "tag": "feature"
   },
-  {
+{
     "g": "Custom Provider",
     "icon": "🔌",
     "k": "CUSTOM_BASE_URL",
     "lbl": "OpenAI-compatible base URL",
-    "type": "text"
+    "type": "text",
+    "tag": "feature"
   },
-  {
+{
     "g": "Custom Provider",
     "icon": "🔌",
     "k": "CUSTOM_MODEL_ID",
     "lbl": "Model ID",
     "type": "model",
     "options_key": "LLM_MODEL",
-    "ph": "custom model id"
+    "ph": "custom model id",
+    "tag": "feature"
   },
-  {
+{
     "g": "Custom Provider",
     "icon": "🔌",
     "k": "CUSTOM_MODEL_NAME",
     "lbl": "Friendly model name",
-    "type": "text"
+    "type": "text",
+    "tag": "feature"
   },
-  {
+{
     "g": "Custom Provider",
     "icon": "🔌",
     "k": "CUSTOM_API_KEY",
     "lbl": "Provider API key",
     "type": "password",
-    "secret": 1
+    "tag": "credential"
   },
-  {
+{
     "g": "Custom Provider",
     "icon": "🔌",
     "k": "CUSTOM_API_TYPE",
@@ -1647,126 +1734,217 @@ const FIELDS = [
       "gemini",
       "openrouter"
     ],
-    "ph": "openai-completions"
+    "ph": "openai-completions",
+    "tag": "feature"
   },
-  {
+{
     "g": "Custom Provider",
     "icon": "🔌",
     "k": "CUSTOM_CONTEXT_WINDOW",
     "lbl": "Context window",
     "type": "number",
-    "ph": "128000"
+    "ph": "128000",
+    "tag": "advanced"
   },
-  {
+{
     "g": "Custom Provider",
     "icon": "🔌",
     "k": "CUSTOM_MAX_TOKENS",
     "lbl": "Max output tokens",
     "type": "number",
-    "ph": "500"
+    "ph": "500",
+    "tag": "advanced"
   },
-  {
+{
     "g": "Telegram",
     "icon": "✈️",
     "k": "TELEGRAM_BOT_TOKEN",
     "lbl": "Bot token from BotFather",
     "type": "password",
-    "secret": 1,
-    "common": 1
+    "common": 1,
+    "tag": "credential"
   },
-  {
+{
     "g": "Telegram",
     "icon": "✈️",
     "k": "TELEGRAM_ALLOWED_USERS",
     "lbl": "Allowed user IDs (comma)",
     "type": "text",
     "ph": "123456789,987654321",
-    "common": 1
+    "common": 1,
+    "tag": "critical"
   },
-  {
+{
     "g": "Telegram",
     "icon": "✈️",
     "k": "TELEGRAM_USER_ID",
     "lbl": "Single Telegram user ID",
-    "type": "text"
+    "type": "text",
+    "tag": "optional"
   },
-  {
+{
     "g": "Telegram",
     "icon": "✈️",
     "k": "TELEGRAM_USER_IDS",
     "lbl": "Telegram user IDs (comma)",
-    "type": "text"
+    "type": "text",
+    "tag": "optional"
   },
-  {
+{
     "g": "Deployment",
     "icon": "🧭",
     "k": "APP_BASE",
     "lbl": "Public app base path",
     "type": "text",
-    "ph": "/app"
+    "ph": "/app",
+    "tag": "advanced"
   },
-  {
+{
     "g": "Deployment",
     "icon": "🧭",
     "k": "BACKUP_DATASET",
     "lbl": "Backup dataset alias",
     "type": "text",
-    "ph": "huggingclaw-backup"
+    "ph": "huggingclaw-backup",
+    "tag": "optional"
   },
-  {
+{
     "g": "Deployment",
     "icon": "🧭",
     "k": "SPACE_AUTHOR_NAME",
     "lbl": "HF Space author name",
-    "type": "text"
+    "type": "text",
+    "tag": "optional"
   },
-  {
+{
     "g": "Deployment",
     "icon": "🧭",
     "k": "SPACE_HOST",
     "lbl": "HF Space host domain",
-    "type": "text"
+    "type": "text",
+    "tag": "optional"
   },
-  {
+{
     "g": "Deployment",
     "icon": "🧭",
     "k": "PORT",
     "lbl": "Public dashboard port",
     "type": "number",
-    "ph": "7861"
+    "ph": "7861",
+    "tag": "advanced"
   },
-  {
+{
     "g": "Deployment",
     "icon": "🧭",
     "k": "GATEWAY_PORT",
     "lbl": "OpenClaw internal port",
     "type": "number",
-    "ph": "7860"
+    "ph": "7860",
+    "tag": "advanced"
   },
-  {
+{
     "g": "Deployment",
     "icon": "🧭",
     "k": "JUPYTER_PORT",
     "lbl": "Jupyter internal port",
     "type": "number",
-    "ph": "8888"
+    "ph": "8888",
+    "tag": "advanced"
   },
-  {
+{
     "g": "Deployment",
     "icon": "🧭",
     "k": "JUPYTER_BASE",
     "lbl": "Jupyter public base path",
     "type": "text",
-    "ph": "/terminal"
+    "ph": "/terminal",
+    "tag": "advanced"
+  },
+  {
+    "g": "Rotation Pools",
+    "icon": "🔄",
+    "k": "AI_GATEWAY_API_KEYS",
+    "lbl": "AI Gateway pool (comma-sep)",
+    "type": "text",
+    "tag": "advanced"
+  },
+  {
+    "g": "Rotation Pools",
+    "icon": "🔄",
+    "k": "COPILOT_GITHUB_TOKENS",
+    "lbl": "GitHub Copilot token pool",
+    "type": "text",
+    "tag": "advanced"
+  },
+  {
+    "g": "Rotation Pools",
+    "icon": "🔄",
+    "k": "KIMI_API_KEYS",
+    "lbl": "Kimi pool",
+    "type": "text",
+    "tag": "advanced"
+  },
+  {
+    "g": "Rotation Pools",
+    "icon": "🔄",
+    "k": "MODELSTUDIO_API_KEYS",
+    "lbl": "ModelStudio pool",
+    "type": "text",
+    "tag": "advanced"
+  },
+  {
+    "g": "Rotation Pools",
+    "icon": "🔄",
+    "k": "QIANFAN_API_KEYS",
+    "lbl": "Qianfan pool",
+    "type": "text",
+    "tag": "advanced"
+  },
+  {
+    "g": "Rotation Pools",
+    "icon": "🔄",
+    "k": "SYNTHETIC_API_KEYS",
+    "lbl": "Synthetic pool",
+    "type": "text",
+    "tag": "advanced"
+  },
+  {
+    "g": "Rotation Pools",
+    "icon": "🔄",
+    "k": "VENICE_API_KEYS",
+    "lbl": "Venice pool",
+    "type": "text",
+    "tag": "advanced"
+  },
+  {
+    "g": "Model Lists",
+    "icon": "📋",
+    "k": "VENICE_MODELS",
+    "lbl": "Visible Venice models",
+    "type": "model_list",
+    "options_key": "VENICE_MODELS",
+    "ph": "Select models to build a comma list",
+    "tag": "optional"
+  },
+  {
+    "g": "Model Lists",
+    "icon": "📋",
+    "k": "SYNTHETIC_MODELS",
+    "lbl": "Visible Synthetic models",
+    "type": "model_list",
+    "options_key": "SYNTHETIC_MODELS",
+    "ph": "Select models to build a comma list",
+    "tag": "optional"
   }
-];
+]
 
 const ICONS = {
-  All:'🏠', Core:'⚡', Deployment:'🧭', 'Provider Keys':'🔑', 'Rotation Pools':'🔄',
-  'Model Lists':'📋', 'Custom Provider':'🔌', Telegram:'✈️', WhatsApp:'💬',
-  Cloudflare:'☁️', Backup:'💾', DevData:'🧪', Runtime:'⚙️', 'Custom Env':'🔧'
+  All:'🏠', Core:'⚡', Startup:'🚀', DevData:'🧪', WhatsApp:'💬',
+  Cloudflare:'☁️', Gateway:'🔀', Logging:'📝', Network:'🌐', Plugins:'🔌',
+  Deployment:'🧭', 'Provider Keys':'🔑', 'Rotation Pools':'🔄',
+  'Model Lists':'📋', 'Custom Provider':'🧩', Telegram:'✈️',
+  Backup:'💾', Runtime:'⚙️', Integrations:'🔗', 'Custom Env':'🔧'
 };
-
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({
   '&': '&amp;',
@@ -1946,11 +2124,18 @@ function valueControlHTML(field) {
 }
 
 function cardHTML(f) {
-  const badge = f.secret
-    ? '<span class="badge badge-s">secret</span>'
-    : '<span class="badge badge-f">safe</span>';
+  const TAG_META = {
+    critical:   { cls: 'badge-critical',   lbl: 'critical'   },
+    credential: { cls: 'badge-credential', lbl: 'credential' },
+    feature:    { cls: 'badge-feature',    lbl: 'feature'    },
+    optional:   { cls: 'badge-optional',   lbl: 'optional'   },
+    advanced:   { cls: 'badge-advanced',   lbl: 'advanced'   },
+    build:      { cls: 'badge-build',      lbl: 'build-time' },
+  };
+  const tm = TAG_META[f.tag] || TAG_META.optional;
+  const badge = `<span class="badge ${tm.cls}">${tm.lbl}</span>`;
 
-  return `<div class="env-card" data-row data-group="${esc(f.g)}" data-search="${esc((f.g + ' ' + f.k + ' ' + (f.lbl || '')).toLowerCase())}">
+  return `<div class="env-card" data-row data-group="${esc(f.g)}" data-search="${esc((f.g + ' ' + f.k + ' ' + (f.lbl || '') + ' ' + (f.tag || '')).toLowerCase())}">
     <div class="card-top">
       <input type="checkbox" class="card-check" data-check="${esc(f.k)}" ${f.common ? 'data-common="1"' : ''}>
       <div class="card-info">
@@ -2241,6 +2426,7 @@ function renderSections() {
       <div class="sec-header">
         <span class="sec-icon">${ICONS[grp] || '📁'}</span>
         <span class="sec-title">${esc(grp)}</span>
+        <span class="sec-count">${items.length}</span>
         <div class="sec-line"></div>
       </div>
       <div class="cards">${items.map(cardHTML).join('')}</div>`;

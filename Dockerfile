@@ -105,6 +105,7 @@ RUN chmod +x /home/node/app/start.sh \
               /home/node/app/cloudflare-proxy-setup.py \
               /home/node/app/cloudflare-keepalive-setup.py \
               /home/node/app/openclaw-sync.py \
+              /home/node/app/jupyter-devdata-sync.py \
               /home/node/app/multi-provider-key-rotator.cjs
 
 USER node

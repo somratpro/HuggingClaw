@@ -24,6 +24,8 @@ if (
 const DEBUG = process.env.CLOUDFLARE_PROXY_DEBUG === "true";
 const PROXY_SHARED_SECRET = (process.env.CLOUDFLARE_PROXY_SECRET || "").trim();
 const DEFAULT_PROXY_DOMAINS = [
+  // Messaging & social platforms — these are the primary use-case for the
+  // Cloudflare proxy on HF Spaces (geo-restrictions on Telegram, Discord, WA).
   "api.telegram.org", "discord.com", "discordapp.com",
   "gateway.discord.gg", "status.discord.com", "web.whatsapp.com",
   "graph.facebook.com", "graph.instagram.com",
@@ -31,19 +33,15 @@ const DEFAULT_PROXY_DOMAINS = [
   "api.linkedin.com", "www.linkedin.com",
   "open.tiktokapis.com", "oauth.reddit.com",
   "youtube.com", "www.youtube.com",
-  "api.openai.com",
-  "integrate.api.nvidia.com", "api.nvidia.com",
-  "api.anthropic.com",
-  "api.deepseek.com",
-  "openrouter.ai",
-  "api.moonshot.cn",
-  "api.mistral.ai",
-  "api.groq.com",
-  "api.cohere.ai", "api.cohere.com",
-  "api.together.xyz", "api.together.ai",
-  "api.cerebras.ai",
+  // Email delivery
   "api.resend.com", "api.sendgrid.com", "api.mailgun.net",
+  // Google services
   "googleapis.com", "google.com", "googleusercontent.com", "gstatic.com",
+  // NOTE: AI-provider domains (api.openai.com, api.anthropic.com, etc.) are
+  // intentionally NOT included here. Proxying AI calls routes your API keys
+  // through the Cloudflare Worker without an explicit opt-in. Users who need
+  // AI API calls proxied (e.g. geo-restricted regions) can add specific
+  // domains via the CLOUDFLARE_PROXY_DOMAINS environment variable.
 ];
 const PROXY_DOMAINS_RAW = (process.env.CLOUDFLARE_PROXY_DOMAINS || "").trim();
 const PROXY_ALL = PROXY_DOMAINS_RAW === "*";

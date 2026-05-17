@@ -840,6 +840,21 @@ warmup_browser() {
 
 # ── Start background services ──
 export LLM_MODEL="$LLM_MODEL"
+
+# ── Ensure key-rotator uses the correct HF token for huggingface.co calls ──
+# NODE_OPTIONS preloads multi-provider-key-rotator.cjs into health-server.js.
+# The rotator patches https.request and injects HUGGINGFACE_HUB_TOKEN (or
+# falls back to LLM_API_KEY) for any call to huggingface.co — including the
+# privacy-detection API call in detectSpacePrivacy(). If HUGGINGFACE_HUB_TOKEN
+# is not set (user's LLM provider is not HuggingFace), the rotator falls back
+# to LLM_API_KEY, which is the AI-provider key, NOT the HF owner token.
+# This causes a 401 on /api/spaces/${SPACE_ID} → privacy detection always
+# fails → SPACE_IS_PRIVATE stays true → public-space links never open in a
+# new tab.
+# Fix: seed HUGGINGFACE_HUB_TOKEN from HF_TOKEN when not already set.
+# HF Spaces auto-injects HF_TOKEN as the space owner's token, so this is safe.
+export HUGGINGFACE_HUB_TOKEN="${HUGGINGFACE_HUB_TOKEN:-${HF_TOKEN:-}}"
+
 # 10. Start Health Server & Dashboard
 node /home/node/app/health-server.js &
 HEALTH_PID=$!
