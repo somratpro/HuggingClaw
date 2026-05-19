@@ -1672,6 +1672,16 @@ while true; do
   # 11. Start WhatsApp Guardian after the gateway is accepting connections
   start_guardian_once
 
+  # ── Silence D-Bus errors for headless Chromium ──
+  if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
+    if command -v dbus-launch >/dev/null 2>&1; then
+      eval "$(dbus-launch --sh-syntax 2>/dev/null)" || true
+      export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-disabled:}"
+    else
+      export DBUS_SESSION_BUS_ADDRESS="disabled:"
+    fi
+  fi
+
   # 11.5 Warm up the managed browser so first browser actions have a live tab
   warmup_browser
 
