@@ -93,6 +93,12 @@ DEV_MODE_ENABLED=false
 if hc_is_true "$DEV_MODE_NORMALIZED"; then
   DEV_MODE_ENABLED=true
 fi
+# Auto-enable DEV_MODE when GATEWAY_TOKEN is set and DEV_MODE was not explicitly configured.
+# GATEWAY_TOKEN doubles as JUPYTER_TOKEN (see start_jupyter_once) — no extra secret required.
+if [ "$DEV_MODE_ENABLED" != "true" ] && [ -z "${DEV_MODE:-}" ] && [ -n "${GATEWAY_TOKEN:-}" ]; then
+  DEV_MODE_ENABLED=true
+  echo "GATEWAY_TOKEN set and DEV_MODE not explicitly configured — auto-enabling terminal (set DEV_MODE=false to opt out)"
+fi
 SYNC_INTERVAL="$(trim_var "${SYNC_INTERVAL:-180}")"
 DEVDATA_DATASET_NAME="$(trim_var "${DEVDATA_DATASET_NAME:-huggingclaw-devdata}")"
 DEVDATA_SYNC_INTERVAL="$(trim_var "${DEVDATA_SYNC_INTERVAL:-180}")"
@@ -514,10 +520,10 @@ inject_provider_models_from_env "github-copilot" "GITHUB_COPILOT_MODELS" "COPILO
 
 # Browser configuration (managed local Chromium in HF/Docker)
 BROWSER_EXECUTABLE_PATH=""
-# On Debian/Ubuntu, /usr/bin/chromium is a shell wrapper; the real ELF binary
-# lives at /usr/lib/chromium/chromium. Check the real binary first, then fall
-# back to wrapper scripts (which are also valid executablePath values for
-# Playwright/OpenClaw — they re-exec the real binary internally).
+BROWSER_WRAPPER_PATH=""
+# On Debian/Ubuntu, /usr/bin/chromium is often a shell wrapper while the real
+# ELF binary lives under /usr/lib/chromium/*. Prefer a real ELF binary, then
+# fall back to wrapper launchers (Playwright/OpenClaw can execute those too).
 for candidate in \
     /usr/lib/chromium/chromium \
     /usr/lib/chromium-browser/chromium-browser \
@@ -529,10 +535,17 @@ for candidate in \
       BROWSER_EXECUTABLE_PATH="$candidate"
       break
     fi
+    if [ -z "$BROWSER_WRAPPER_PATH" ]; then
+      BROWSER_WRAPPER_PATH="$candidate"
+    fi
   fi
 done
+if [ -z "$BROWSER_EXECUTABLE_PATH" ] && [ -n "$BROWSER_WRAPPER_PATH" ]; then
+  BROWSER_EXECUTABLE_PATH="$BROWSER_WRAPPER_PATH"
+  echo "No ELF Chromium binary found; using launcher wrapper at $BROWSER_EXECUTABLE_PATH"
+fi
 if [ -z "$BROWSER_EXECUTABLE_PATH" ]; then
-  echo "Warning: No real Chromium binary found. Browser plugin will be disabled."
+  echo "Warning: Chromium executable not found. Browser plugin will be disabled."
 fi
 
 BROWSER_SHOULD_ENABLE=false
@@ -923,6 +936,13 @@ start_jupyter_once() {
   [ "$RUNTIME_JUPYTER_ENABLED" = "true" ] || return 0
   if [ -n "${JUPYTER_PID:-}" ] && kill -0 "$JUPYTER_PID" 2>/dev/null; then
     return 0
+  fi
+
+  # GATEWAY_TOKEN fallback: if JUPYTER_TOKEN is unset or still the insecure default,
+  # reuse GATEWAY_TOKEN. Both protect the same Space, so the credential is equivalent.
+  if { [ -z "${JUPYTER_TOKEN:-}" ] || [ "${JUPYTER_TOKEN}" = "huggingface" ]; } && [ -n "${GATEWAY_TOKEN:-}" ]; then
+    JUPYTER_TOKEN="$GATEWAY_TOKEN"
+    echo "JUPYTER_TOKEN not set — using GATEWAY_TOKEN as terminal auth token"
   fi
 
   # Security guard: refuse to start JupyterLab with the insecure default token.
