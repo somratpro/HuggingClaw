@@ -22,12 +22,13 @@ const JUPYTER_HOST = "127.0.0.1";
 const JUPYTER_BASE = normalizeBase(process.env.JUPYTER_BASE, "/terminal");
 const GATEWAY_TOKEN = (process.env.GATEWAY_TOKEN || "").trim();
 const DEV_MODE_ENABLED = isTrue(process.env.DEV_MODE);
-// Default true. Only false when DEV_MODE=false or HUGGINGCLAW_JUPYTER_ENABLED=false is explicitly set.
+// Explicit HUGGINGCLAW_JUPYTER_ENABLED=true enables Jupyter.
+// Otherwise DEV_MODE=true enables it unless HUGGINGCLAW_JUPYTER_ENABLED is explicitly false.
 // HUGGINGCLAW_JUPYTER_ENABLED=true is the explicit user override and always wins.
 const JUPYTER_ENABLED =
   /^(true|1|yes|on)$/i.test(String(process.env.HUGGINGCLAW_JUPYTER_ENABLED || "").trim()) ||
   (
-    !/^(false|0|no|off)$/i.test(String(process.env.DEV_MODE || "").trim()) &&
+    isTrue(process.env.DEV_MODE) &&
     !/^(false|0|no|off)$/i.test(String(process.env.HUGGINGCLAW_JUPYTER_ENABLED || "").trim())
   );
 const startTime = Date.now();
@@ -252,9 +253,14 @@ function parseCookies(req) {
 
 // Constant-time comparison — prevent timing attacks on token check
 function safeEqual(a, b) {
-  if (typeof a !== "string" || typeof b !== "string" || a.length !== b.length) return false;
-  let d = 0;
-  for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  if (typeof a !== "string" || typeof b !== "string") return false;
+  // Pad both to the same length so the loop always takes constant time,
+  // preventing token length from being leaked via early-return timing.
+  const len = Math.max(a.length, b.length, 1);
+  const pa = a.padEnd(len, "\0");
+  const pb = b.padEnd(len, "\0");
+  let d = a.length === b.length ? 0 : 1; // length mismatch → always fail
+  for (let i = 0; i < len; i++) d |= pa.charCodeAt(i) ^ pb.charCodeAt(i);
   return d === 0;
 }
 
@@ -668,7 +674,7 @@ const server = http.createServer(async (req, res) => {
       const body = await readBody(req);
       const token = decodeURIComponent((body.match(/(?:^|&)token=([^&]*)/) || [])[1] || "").replace(/\+/g, " ");
       if (safeEqual(token, GATEWAY_TOKEN)) {
-        const cookie = `hc_env_auth=${encodeURIComponent(GATEWAY_TOKEN)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400`;
+        const cookie = `hc_env_auth=${encodeURIComponent(GATEWAY_TOKEN)}; Path=/; HttpOnly; SameSite=None; Secure; Max-Age=86400`;
         res.writeHead(302, { Location: "/env-builder", "Set-Cookie": cookie, "Cache-Control": "no-store" });
         return res.end();
       }
@@ -680,7 +686,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (pathname === "/env-builder/logout") {
-    res.writeHead(302, { Location: "/env-builder", "Set-Cookie": "hc_env_auth=; Path=/; HttpOnly; Max-Age=0", "Cache-Control": "no-store" });
+    res.writeHead(302, { Location: "/env-builder", "Set-Cookie": "hc_env_auth=; Path=/; HttpOnly; SameSite=None; Secure; Max-Age=0", "Cache-Control": "no-store" });
     return res.end();
   }
 

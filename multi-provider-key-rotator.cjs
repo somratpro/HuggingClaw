@@ -87,6 +87,13 @@ const PROVIDERS = [
     envSingular:'ZAI_API_KEY',
   },
   {
+    name:       'kimi-coding',
+    // kimi-coding routes through api.moonshot.cn; dedicated entry so KIMI_API_KEYS pool is used
+    hostname:   /(?:^|\.)api\.moonshot\.cn$/i,
+    envPlural:  'KIMI_API_KEYS',
+    envSingular:'KIMI_API_KEY',
+  },
+  {
     name:       'moonshot',
     hostname:   /(?:^|\.)api\.moonshot\.cn$/i,
     envPlural:  'MOONSHOT_API_KEYS',
