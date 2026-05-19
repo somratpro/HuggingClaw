@@ -20,7 +20,7 @@ const { randomUUID } = require('node:crypto');
 const GATEWAY_URL = "ws://127.0.0.1:7860";
 const GATEWAY_TOKEN = process.env.GATEWAY_TOKEN || "huggingclaw";
 const WHATSAPP_ENABLED = /^true$/i.test(process.env.WHATSAPP_ENABLED || "");
-const CHECK_INTERVAL = 5000;
+const CHECK_INTERVAL = 30000;
 const WAIT_TIMEOUT = 120000;
 const POST_515_NO_LOGOUT_MS = 90 * 1000;
 const SUCCESS_COOLDOWN_MS = 60 * 1000;
@@ -91,7 +91,7 @@ async function createConnection() {
           method: "connect",
           params: {
             minProtocol: 3,
-            maxProtocol: 3,
+            maxProtocol: 4,
             client: {
               id: "gateway-client",
               version: "1.0.0",
@@ -141,7 +141,13 @@ async function callRpc(ws, method, params) {
       }
     };
     ws.on("message", handler);
-    ws.send(JSON.stringify({ type: "req", id, method, params }));
+    try {
+      ws.send(JSON.stringify({ type: "req", id, method, params }));
+    } catch (sendErr) {
+      ws.removeListener("message", handler);
+      reject(sendErr);
+      return;
+    }
     setTimeout(() => { ws.removeListener("message", handler); reject(new Error("RPC Timeout")); }, WAIT_TIMEOUT + 5000);
   });
 }
@@ -246,6 +252,13 @@ if (!WHATSAPP_ENABLED) {
   writeStatus({ configured: false, connected: false, pairing: false });
   process.exit(0);
 }
+
+process.on("unhandledRejection", (reason) => {
+  const msg = reason && reason.message ? reason.message : String(reason);
+  if (!/RPC Timeout|Timeout/i.test(msg)) {
+    console.log(`[guardian] Unhandled rejection: ${msg}`);
+  }
+});
 
 writeStatus({ configured: true, connected: false, pairing: false });
 console.log("[guardian] WhatsApp Guardian active. Monitoring pairing status...");

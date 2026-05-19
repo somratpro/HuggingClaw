@@ -1,5 +1,6 @@
 process.on('uncaughtException', function(err) {
   if (err.code === 'EPIPE') return;
+  if (err.code === 'ECONNRESET' || err.code === 'ENOTCONN' || err.code === 'ERR_STREAM_DESTROYED') return;
   throw err;
 });
 /**

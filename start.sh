@@ -8,7 +8,70 @@ umask 0077
 # ════════════════════════════════════════════════════════════════
 
 # ── Startup Banner ──
+trim_var() {
+  # Trim leading/trailing whitespace from a value.
+  printf '%s' "$1" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+}
+
+hc_is_true() {
+  case "$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')" in
+    1|true|yes|on) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+load_env_bundle() {
+  # HUGGINGCLAW_ENV_BUNDLE is a single base64url-encoded JSON object generated
+  # by /env-builder. Existing individual env vars win over bundled values.
+  local bundle="${HUGGINGCLAW_ENV_BUNDLE:-${ENV_BUNDLE:-}}"
+  [ -n "$bundle" ] || return 0
+  eval "$(HUGGINGCLAW_ENV_BUNDLE="$bundle" python3 - <<'PYBUNDLE'
+import base64, json, os, re, shlex, sys
+
+raw = os.environ.get("HUGGINGCLAW_ENV_BUNDLE", "").strip()
+try:
+    if raw.startswith("{"):
+        data = json.loads(raw)
+    else:
+        padded = raw + "=" * (-len(raw) % 4)
+        data = json.loads(base64.urlsafe_b64decode(padded.encode()).decode())
+    if not isinstance(data, dict):
+        raise ValueError("bundle must decode to a JSON object")
+    for key, value in data.items():
+        if not re.fullmatch(r"[A-Z_][A-Z0-9_]*", str(key)):
+            continue
+        if str(key) in {"HUGGINGCLAW_ENV_BUNDLE", "ENV_BUNDLE"}:
+            continue
+        if os.environ.get(str(key), ""):
+            continue
+        if value is None or isinstance(value, (dict, list)):
+            continue
+        print(f"export {key}={shlex.quote(str(value))}")
+except Exception as exc:
+    print(f"Warning: invalid HUGGINGCLAW_ENV_BUNDLE ignored: {exc}", file=sys.stderr)
+PYBUNDLE
+)"
+}
+
+load_env_bundle
+
+# Normalize core env values so accidental surrounding spaces in HF Variables
+# do not block updates or cause stale comparisons/merges.
+LLM_MODEL="$(trim_var "${LLM_MODEL:-}")"
+GATEWAY_TOKEN="$(trim_var "${GATEWAY_TOKEN:-}")"
+OPENCLAW_PASSWORD="$(trim_var "${OPENCLAW_PASSWORD:-}")"
+LLM_API_KEY="$(trim_var "${LLM_API_KEY:-}")"
+CLOUDFLARE_PROXY_URL="$(trim_var "${CLOUDFLARE_PROXY_URL:-}")"
+
 OPENCLAW_VERSION="${OPENCLAW_VERSION:-latest}"
+APP_BASE="$(trim_var "${APP_BASE:-/app}")"
+JUPYTER_BASE="$(trim_var "${JUPYTER_BASE:-/terminal}")"
+PORT="$(trim_var "${PORT:-7861}")"
+GATEWAY_PORT="$(trim_var "${GATEWAY_PORT:-7860}")"
+JUPYTER_PORT="$(trim_var "${JUPYTER_PORT:-8888}")"
+BACKUP_DATASET_NAME="$(trim_var "${BACKUP_DATASET_NAME:-${BACKUP_DATASET:-huggingclaw-backup}}")"
+SPACE_AUTHOR_NAME="$(trim_var "${SPACE_AUTHOR_NAME:-}")"
+SPACE_HOST="$(trim_var "${SPACE_HOST:-}")"
 OPENCLAW_APP_DIR="/home/node/.openclaw/openclaw-app"
 OPENCLAW_RUNTIME_VERSION=""
 OPENCLAW_FILE_LOG_LEVEL_CONFIGURED=false
@@ -21,7 +84,21 @@ WHATSAPP_ENABLED_CONFIGURED=false
 [ "${WHATSAPP_ENABLED+x}" = "x" ] && WHATSAPP_ENABLED_CONFIGURED=true
 WHATSAPP_ENABLED="${WHATSAPP_ENABLED:-false}"
 WHATSAPP_ENABLED_NORMALIZED=$(printf '%s' "$WHATSAPP_ENABLED" | tr '[:upper:]' '[:lower:]')
-SYNC_INTERVAL="${SYNC_INTERVAL:-180}"
+DEV_MODE_RAW="${DEV_MODE:-false}"
+DEV_MODE_NORMALIZED=$(printf '%s' "$DEV_MODE_RAW" | tr '[:upper:]' '[:lower:]')
+DEV_MODE_ENABLED=false
+if hc_is_true "$DEV_MODE_NORMALIZED"; then
+  DEV_MODE_ENABLED=true
+fi
+SYNC_INTERVAL="$(trim_var "${SYNC_INTERVAL:-180}")"
+DEVDATA_DATASET_NAME="$(trim_var "${DEVDATA_DATASET_NAME:-huggingclaw-devdata}")"
+DEVDATA_SYNC_INTERVAL="$(trim_var "${DEVDATA_SYNC_INTERVAL:-180}")"
+DEVDATA_RAW="$(trim_var "${DEVDATA:-on}")"
+DEVDATA_NORMALIZED=$(printf '%s' "$DEVDATA_RAW" | tr '[:upper:]' '[:lower:]')
+DEVDATA_ENABLED=true
+if ! hc_is_true "$DEVDATA_NORMALIZED"; then
+  DEVDATA_ENABLED=false
+fi
 if [ -n "${SPACE_HOST:-}" ]; then
   OPENCLAW_CONSOLE_LOG_LEVEL="${OPENCLAW_CONSOLE_LOG_LEVEL:-warn}"
   OPENCLAW_FILE_LOG_LEVEL="${OPENCLAW_FILE_LOG_LEVEL:-info}"
@@ -39,7 +116,7 @@ else
 fi
 echo ""
 echo "  ╔══════════════════════════════════════════╗"
-echo "  ║          🦞 HuggingClaw Gateway          ║"
+echo "  ║     🦞 HuggingClaw + 💻 JupyterLab      ║"
 echo "  ╚══════════════════════════════════════════╝"
 echo ""
 
@@ -57,7 +134,7 @@ fi
 if [ -n "$ERRORS" ]; then
   echo "Missing required secrets:"
   echo -e "$ERRORS"
-echo "Add them in HF Spaces → Settings → Secrets"
+  echo "Add them in HF Spaces → Settings → Secrets"
   exit 1
 fi
 
@@ -175,6 +252,14 @@ promote_first_pool_key "CEREBRAS_API_KEY" "CEREBRAS_API_KEYS"
 promote_first_pool_key "VENICE_API_KEY" "VENICE_API_KEYS"
 promote_first_pool_key "SYNTHETIC_API_KEY" "SYNTHETIC_API_KEYS"
 promote_first_pool_key "COPILOT_GITHUB_TOKEN" "COPILOT_GITHUB_TOKENS"
+promote_first_pool_key "AI_GATEWAY_API_KEY" "AI_GATEWAY_API_KEYS"
+
+# kimi-coding uses Moonshot AI endpoint (api.moonshot.cn).
+# If KIMI_API_KEY is set but MOONSHOT_API_KEY is not, mirror it so the
+# multi-provider-key-rotator (which matches on api.moonshot.cn) injects it.
+if [ -z "${MOONSHOT_API_KEY:-}" ] && [ -n "${KIMI_API_KEY:-}" ]; then
+  export MOONSHOT_API_KEY="$KIMI_API_KEY"
+fi
 promote_first_pool_key "HUGGINGFACE_HUB_TOKEN" "HUGGINGFACE_HUB_TOKENS"
 
 # Compatibility aliases for Google provider secrets some users already have.
@@ -200,6 +285,11 @@ export NPM_CONFIG_PREFIX="${NPM_CONFIG_PREFIX:-/home/node/.local}"
 export npm_config_prefix="$NPM_CONFIG_PREFIX"
 export PYTHONUSERBASE="${PYTHONUSERBASE:-/home/node/.local}"
 export DEBIAN_FRONTEND="${DEBIAN_FRONTEND:-noninteractive}"
+# Show current working directory in terminal prompt (JupyterLab terminals can
+# otherwise display only "$" when PS1 is unset/minimal).
+if [ -z "${PS1:-}" ] || [ "$PS1" = "$ " ]; then
+  export PS1='\u@\h:\w\$ '
+fi
 STARTUP_FILE="/home/node/.openclaw/workspace/startup.sh"
 
 # ── Restore workspace/state from HF Dataset ──
@@ -368,8 +458,10 @@ inject_provider_models_from_env() {
   CONFIG_JSON=$(jq \
     --arg provider "$provider" \
     --argjson models "$models_json" \
-    '.models.mode = "merge"
-     | .models.providers[$provider] = ((.models.providers[$provider] // {}) + {models: $models})' <<<"$CONFIG_JSON")
+    'if .models.providers[$provider] then
+       .models.mode = "merge"
+       | .models.providers[$provider].models = $models
+     else . end' <<<"$CONFIG_JSON")
 }
 
 # Built-in provider model envs (optional)
@@ -433,6 +525,8 @@ fi
 #          plugins that the Control UI/dashboard needs to render correctly
 #          on HF Spaces. Without these the UI shows blank panels.
 #          telegram/whatsapp/browser/acpx are added conditionally below.
+#          Do not create a disabled acpx entry when the plugin is absent;
+#          OpenClaw reports that as a config warning on HF Spaces.
 #   DENY:  lmstudio crashes on boot when no local server is reachable;
 #          xai PLUGIN (separate from the xai model PROVIDER) is broken in
 #          current OpenClaw releases and prevents gateway start. Disabling
@@ -452,20 +546,17 @@ if [ "$WHATSAPP_ENABLED_NORMALIZED" = "true" ]; then
 fi
 
 # Apply plugin allow/deny + per-entry toggles in one jq pass.
-ACPX_DISABLED=false
-if [ "$ACP_PLUGIN_MODE" = "disabled" ]; then ACPX_DISABLED=true; fi
 BROWSER_DISABLED=true
 if [ "$BROWSER_SHOULD_ENABLE" = "true" ]; then BROWSER_DISABLED=false; fi
 
 CONFIG_JSON=$(jq \
   --argjson allow "$PLUGIN_ALLOW_JSON" \
-  --argjson acpxDisabled "$ACPX_DISABLED" \
   --argjson browserDisabled "$BROWSER_DISABLED" \
   '.plugins.allow = $allow
    | .plugins.deny = ["lmstudio","xai"]
    | .plugins.entries.lmstudio.enabled = false
    | .plugins.entries.xai.enabled = false
-   | (if $acpxDisabled then .plugins.entries.acpx.enabled = false else . end)
+   | del(.plugins.entries.acpx)
    | (if $browserDisabled then
         .plugins.entries.browser.enabled = false | .browser.enabled = false
       else . end)' <<<"$CONFIG_JSON")
@@ -513,6 +604,24 @@ if [ -n "${ALLOWED_ORIGINS:-}" ]; then
   CONFIG_JSON=$(echo "$CONFIG_JSON" | jq ".gateway.controlUi.allowedOrigins += $ORIGINS_JSON | .gateway.controlUi.allowedOrigins |= unique")
 fi
 
+resolve_telegram_api_root() {
+  local candidate="$(trim_var "${CLOUDFLARE_PROXY_URL:-}")"
+  if [ -n "$candidate" ]; then
+    case "$candidate" in
+      http://*|https://*)
+        printf '%s' "$candidate"
+        return 0
+        ;;
+      *)
+        echo "Warning: invalid CLOUDFLARE_PROXY_URL '$candidate' (must start with http:// or https://); falling back to direct Telegram API." >&2
+        ;;
+    esac
+  fi
+  printf '%s' "https://api.telegram.org"
+}
+TELEGRAM_API_ROOT="$(resolve_telegram_api_root)"
+
+
 # Telegram (supports multiple user IDs, comma-separated)
 if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
   CONFIG_JSON=$(echo "$CONFIG_JSON" | jq '.plugins.entries.telegram = {"enabled": true}')
@@ -525,12 +634,12 @@ if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
   # Force ipv4 for Telegram specifically as HF IPv6 often times out
   export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--dns-result-order=ipv4first"
   
-  CONFIG_JSON=$(echo "$CONFIG_JSON" | jq --arg token "$CLEAN_TG_TOKEN" --arg proxy_url "${CLOUDFLARE_PROXY_URL:-}" '
+  CONFIG_JSON=$(echo "$CONFIG_JSON" | jq --arg token "$CLEAN_TG_TOKEN" --arg proxy_url "$TELEGRAM_API_ROOT" '
     .channels.telegram.enabled = true
     | .channels.telegram.botToken = $token
     | .channels.telegram.commands.native = false
     | .channels.telegram.timeoutSeconds = 60
-    | (if $proxy_url != "" then .channels.telegram.apiRoot = $proxy_url else .channels.telegram.apiRoot = "https://api.telegram.org" end)
+    | (if $proxy_url != "" then .channels.telegram.apiRoot = $proxy_url else . end)
     | .channels.telegram.retry = {
         "attempts": 5,
         "minDelayMs": 800,
@@ -594,7 +703,7 @@ if [ -f "$EXISTING_CONFIG" ]; then
      | .channels = ((.channels // {}) * ($desired.channels // {}))
      | .plugins.allow = (((.plugins.allow // []) + ($desired.plugins.allow // [])) | unique)
      | .plugins.deny = (((.plugins.deny // []) + ($desired.plugins.deny // [])) | unique)
-     | .plugins.entries = (($desired.plugins.entries // {}) * (.plugins.entries // {}))
+     | .plugins.entries = ((.plugins.entries // {}) * ($desired.plugins.entries // {}))
      | if $whatsappEnabled then
          ($desired.channels.whatsapp // {"dmPolicy": "pairing"}) as $desiredWhatsapp
          | .plugins.entries.whatsapp.enabled = true
@@ -649,8 +758,34 @@ fi
 if [ -n "${CLOUDFLARE_PROXY_URL:-}" ]; then
   echo "Proxy     : ${CLOUDFLARE_PROXY_URL}"
 fi
+RUNTIME_JUPYTER_ENABLED="$DEV_MODE_ENABLED"
+# Add user bin to PATH for jupyter-lab (installed in Dockerfile when DEV_MODE=true)
+export PATH="$HOME/.local/bin:$PATH"
+
+# Runtime install fallback: only attempt if DEV_MODE is enabled but install failed during build
+if [ "$DEV_MODE_ENABLED" = "true" ] && ! python3 -c "import jupyterlab" >/dev/null 2>&1; then
+  echo "DEV_MODE enabled but jupyter-lab is missing; attempting runtime install..."
+  if python3 -m pip install --user --no-cache-dir --break-system-packages "jupyterlab>=4.2,<5" "tornado>=6.3" "ipywidgets>=8.1"; then
+    echo "Runtime Jupyter install complete."
+    python3 -c "from pathlib import Path; import shutil, jupyter_server; d=Path(jupyter_server.__file__).parent/'templates'; d.mkdir(parents=True,exist_ok=True); shutil.copyfile('/home/node/app/login.html', d/'login.html')" || true
+  else
+    echo "WARNING: Runtime Jupyter install failed; disabling terminal for this boot."
+    RUNTIME_JUPYTER_ENABLED=false
+  fi
+fi
+if [ "$RUNTIME_JUPYTER_ENABLED" = "true" ] && ! python3 -c "import jupyterlab" >/dev/null 2>&1; then
+  echo "WARNING: jupyter-lab still unavailable; disabling terminal for this boot."
+  RUNTIME_JUPYTER_ENABLED=false
+fi
+export HUGGINGCLAW_JUPYTER_ENABLED="$RUNTIME_JUPYTER_ENABLED"
+
 if [ -n "${SPACE_HOST:-}" ]; then
-  echo "Control UI: https://${SPACE_HOST}/app"
+  if [ "$RUNTIME_JUPYTER_ENABLED" = "true" ]; then
+    echo "Routes    : /app/ (Control UI), /terminal/ (JupyterLab)"
+  else
+    echo "Routes    : /app/ (Control UI)"
+  fi
+  echo "Private   : open the Hugging Face App tab first; raw https://${SPACE_HOST}/... links can show HF 404 without the embedded Space session."
 fi
 echo ""
 
@@ -705,9 +840,123 @@ warmup_browser() {
 
 # ── Start background services ──
 export LLM_MODEL="$LLM_MODEL"
+
+# ── Ensure key-rotator uses the correct HF token for huggingface.co calls ──
+# NODE_OPTIONS preloads multi-provider-key-rotator.cjs into health-server.js.
+# The rotator patches https.request and injects HUGGINGFACE_HUB_TOKEN (or
+# falls back to LLM_API_KEY) for any call to huggingface.co — including the
+# privacy-detection API call in detectSpacePrivacy(). If HUGGINGFACE_HUB_TOKEN
+# is not set (user's LLM provider is not HuggingFace), the rotator falls back
+# to LLM_API_KEY, which is the AI-provider key, NOT the HF owner token.
+# This causes a 401 on /api/spaces/${SPACE_ID} → privacy detection always
+# fails → SPACE_IS_PRIVATE stays true → public-space links never open in a
+# new tab.
+# Fix: seed HUGGINGFACE_HUB_TOKEN from HF_TOKEN when not already set.
+# HF Spaces auto-injects HF_TOKEN as the space owner's token, so this is safe.
+export HUGGINGFACE_HUB_TOKEN="${HUGGINGFACE_HUB_TOKEN:-${HF_TOKEN:-}}"
+
 # 10. Start Health Server & Dashboard
 node /home/node/app/health-server.js &
 HEALTH_PID=$!
+
+start_jupyter_once() {
+  [ "$RUNTIME_JUPYTER_ENABLED" = "true" ] || return 0
+  if [ -n "${JUPYTER_PID:-}" ] && kill -0 "$JUPYTER_PID" 2>/dev/null; then
+    return 0
+  fi
+
+  # Security guard: refuse to start JupyterLab with the insecure default token.
+  # JupyterLab exposes a full shell — a weak token is equivalent to no auth.
+  if [ -z "${JUPYTER_TOKEN:-}" ] || [ "${JUPYTER_TOKEN}" = "huggingface" ]; then
+    echo "ERROR: JUPYTER_TOKEN is unset or still set to the insecure default (\"huggingface\")." >&2
+    echo "       JupyterLab grants full shell access. Set a strong, unique token in your Space secrets." >&2
+    echo "       Hint:  openssl rand -hex 32" >&2
+    echo "       DEV_MODE active but JupyterLab will NOT start until JUPYTER_TOKEN is changed." >&2
+    return 1
+  fi
+  JUPYTER_ROOT_DIR="${JUPYTER_ROOT_DIR:-/home/node}"
+  if [ "$JUPYTER_ROOT_DIR" = "/home/node/.openclaw/workspace" ] && [ "$DEVDATA_ENABLED" = "true" ]; then
+    echo "Jupyter root was set to OpenClaw workspace; moving Jupyter root to /home/node/devdata to keep BACKUP and DEVDATA datasets separate."
+    JUPYTER_ROOT_DIR="/home/node/devdata"
+  fi
+  mkdir -p "$JUPYTER_ROOT_DIR"
+  export JUPYTER_ROOT_DIR
+  if [ "$JUPYTER_ROOT_DIR" != "/home/node/app" ]; then
+    if [ -L "$JUPYTER_ROOT_DIR/HuggingClaw" ] || [ ! -e "$JUPYTER_ROOT_DIR/HuggingClaw" ]; then
+      ln -sfn /home/node/app "$JUPYTER_ROOT_DIR/HuggingClaw"
+    fi
+  fi
+  if [ "$JUPYTER_ROOT_DIR" != "/home/node/.openclaw/workspace" ]; then
+    if [ -L "$JUPYTER_ROOT_DIR/HuggingClaw-Workspace" ] || [ ! -e "$JUPYTER_ROOT_DIR/HuggingClaw-Workspace" ]; then
+      ln -sfn /home/node/.openclaw/workspace "$JUPYTER_ROOT_DIR/HuggingClaw-Workspace"
+    fi
+  fi
+
+  # Pre-create runtime directory
+  mkdir -p "$JUPYTER_ROOT_DIR/.jupyter"
+
+  echo "DEV_MODE enabled (${DEV_MODE_RAW}) — starting JupyterLab terminal on internal port 8888 (path: /terminal/) with root: $JUPYTER_ROOT_DIR"
+  JUPYTER_LOG_FILE="/tmp/jupyterlab.log"
+  
+  # Use explicit Python to avoid PATH issues; set memory-friendly limits
+  export PYTHONPATH=""
+  python3 -m jupyterlab \
+      --ip 127.0.0.1 \
+      --port 8888 \
+      --no-browser \
+      --IdentityProvider.token="$JUPYTER_TOKEN" \
+      --ServerApp.base_url=/terminal/ \
+      --ServerApp.terminals_enabled=True \
+      --ServerApp.terminado_settings='{"shell_command":["/bin/bash","-i"]}' \
+      --ServerApp.allow_origin='*' \
+      --ServerApp.allow_remote_access=True \
+      --ServerApp.trust_xheaders=True \
+      --ServerApp.tornado_settings="{'headers': {'Content-Security-Policy': 'frame-ancestors *'}}" \
+      --IdentityProvider.cookie_options="{'SameSite': 'None', 'Secure': True}" \
+      --ServerApp.disable_check_xsrf=True \
+      --LabApp.news_url=None \
+      --LabApp.check_for_updates_class=jupyterlab.NeverCheckForUpdate \
+      --ServerApp.log_level=WARN \
+      --ServerApp.root_dir="$JUPYTER_ROOT_DIR" \
+      >> "$JUPYTER_LOG_FILE" 2>&1 &
+  JUPYTER_PID=$!
+  export JUPYTER_PID
+  echo "JupyterLab started (PID: $JUPYTER_PID)"
+}
+
+# BUG FIX #3: DevData restore must happen BEFORE JupyterLab starts.
+# The background jupyter-devdata-sync.py process is only launched AFTER the
+# gateway is ready (20-90 s from now). If restore ran there, JupyterLab would
+# already be live and the file writes would corrupt its runtime state → crash.
+# Running --restore here (synchronous, before JupyterLab) solves that.
+if [ "$RUNTIME_JUPYTER_ENABLED" = "true" ] && \
+   [ "$DEVDATA_ENABLED" = "true" ] && \
+   [ -n "${HF_TOKEN:-}" ] && \
+   [ -f "/home/node/app/jupyter-devdata-sync.py" ] && \
+   [ "${DEVDATA_DATASET_NAME:-huggingclaw-devdata}" != "${BACKUP_DATASET_NAME:-huggingclaw-backup}" ]; then
+  echo "DevData  : restoring workspace from ${DEVDATA_DATASET_NAME:-huggingclaw-devdata} (before JupyterLab starts)..."
+  python3 /home/node/app/jupyter-devdata-sync.py --restore || \
+    echo "DevData  : restore warning (non-fatal); continuing startup."
+fi
+
+# Fix: reinstall jsonschema AFTER devdata restore — restore can overwrite a broken
+# version from .local/lib/python3.11/site-packages into the workspace, causing
+# JupyterLab to crash with a circular import error on every boot.
+if [ "$DEV_MODE_ENABLED" = "true" ]; then
+  if ! python3 -c "import jsonschema" >/dev/null 2>&1; then
+    echo "DevData  : jsonschema broken after restore — reinstalling (circular import fix)..."
+    python3 -m pip install --force-reinstall --no-cache-dir --break-system-packages "jsonschema>=4.0" >/dev/null 2>&1 || true
+    echo "DevData  : jsonschema reinstall done."
+  fi
+fi
+
+# 10.5. Start JupyterLab Terminal on internal port 8888 (DEV_MODE only)
+# Accessible via /terminal/ path through the health-server proxy
+if [ "$RUNTIME_JUPYTER_ENABLED" = "true" ]; then
+  start_jupyter_once
+else
+  echo "Jupyter terminal disabled for this boot (DEV_MODE=${DEV_MODE_RAW})."
+fi
 
 if [ -n "${CLOUDFLARE_WORKERS_TOKEN:-}" ]; then
   echo "Setting up Cloudflare KeepAlive monitor..."
@@ -728,8 +977,14 @@ export NPM_CONFIG_PREFIX="${NPM_CONFIG_PREFIX:-/home/node/.local}"
 export npm_config_prefix="$NPM_CONFIG_PREFIX"
 export PYTHONUSERBASE="${PYTHONUSERBASE:-/home/node/.local}"
 export DEBIAN_FRONTEND="${DEBIAN_FRONTEND:-noninteractive}"
+if [ -z "${PS1:-}" ] || [ "$PS1" = "$ " ]; then
+  export PS1="\u@\h:\w\$ "
+fi
 STARTUP_FILE="/home/node/.openclaw/workspace/startup.sh"
 _hc_append() {
+  if [ "${HUGGINGCLAW_CAPTURE_DISABLE:-0}" = "1" ]; then
+    return 0
+  fi
   local line="$*"
   mkdir -p "$(dirname "$STARTUP_FILE")"
   touch "$STARTUP_FILE"
@@ -755,6 +1010,28 @@ _hc_append_cmd() {
   else
     _hc_append "$cmd"
   fi
+}
+_hc_args_without_flags() {
+  local out=()
+  local arg
+  for arg in "$@"; do
+    case "$arg" in
+      ''|-) ;;
+      --*) ;;
+      -*) ;;
+      *) out+=("$arg") ;;
+    esac
+  done
+  printf '%s\n' "${out[@]}"
+}
+_hc_has_install_targets() {
+  local item
+  while IFS= read -r item; do
+    [ -n "$item" ] && return 0
+  done <<EOF
+$(_hc_args_without_flags "$@")
+EOF
+  return 1
 }
 _hc_allow_openclaw_plugins() {
   local config="/home/node/.openclaw/openclaw.json"
@@ -807,7 +1084,7 @@ apt-get() {
       _hc_apt_install "$@"
       local rc=$?
       if [ $rc -eq 0 ]; then
-        _hc_append_cmd "sudo apt-get update && sudo apt-get install -y" "$@"
+        _hc_has_install_targets "$@" && _hc_append_cmd "sudo apt-get update && sudo apt-get install -y" "$@"
       fi
       return $rc
       ;;
@@ -834,7 +1111,7 @@ apt() {
       _hc_apt_install "$@"
       local rc=$?
       if [ $rc -eq 0 ]; then
-        _hc_append_cmd "sudo apt-get update && sudo apt-get install -y" "$@"
+        _hc_has_install_targets "$@" && _hc_append_cmd "sudo apt-get update && sudo apt-get install -y" "$@"
       fi
       return $rc
       ;;
@@ -856,32 +1133,65 @@ apt() {
 }
 pip() {
   if [ "${1:-}" = "install" ] && [ -z "${VIRTUAL_ENV:-}" ] && ! _hc_has_arg --user "$@" && ! _hc_has_arg --prefix "$@"; then
-    command pip install --user "${@:2}"
+    command pip install --user --break-system-packages "${@:2}"
   else
     command pip "$@"
   fi
   local rc=$?
-  if [ $rc -eq 0 ] && [ "${1:-}" = "install" ]; then
+  # Skip capture when -r/--requirement is used: the requirements file won't exist on next boot
+  if [ $rc -eq 0 ] && [ "${1:-}" = "install" ] \
+      && ! _hc_has_arg -r "${@:2}" && ! _hc_has_arg --requirement "${@:2}" \
+      && _hc_has_install_targets "${@:2}"; then
     _hc_append_cmd "python3 -m pip install --user" "${@:2}"
   fi
   return $rc
 }
 pip3() {
   if [ "${1:-}" = "install" ] && [ -z "${VIRTUAL_ENV:-}" ] && ! _hc_has_arg --user "$@" && ! _hc_has_arg --prefix "$@"; then
-    command pip3 install --user "${@:2}"
+    command pip3 install --user --break-system-packages "${@:2}"
   else
     command pip3 "$@"
   fi
   local rc=$?
-  if [ $rc -eq 0 ] && [ "${1:-}" = "install" ]; then
+  if [ $rc -eq 0 ] && [ "${1:-}" = "install" ] \
+      && ! _hc_has_arg -r "${@:2}" && ! _hc_has_arg --requirement "${@:2}" \
+      && _hc_has_install_targets "${@:2}"; then
     _hc_append_cmd "python3 -m pip install --user" "${@:2}"
+  fi
+  return $rc
+}
+python() {
+  if [ "${1:-}" = "-m" ] && [ "${2:-}" = "pip" ] && [ "${3:-}" = "install" ] && [ -z "${VIRTUAL_ENV:-}" ] && ! _hc_has_arg --user "${@:3}" && ! _hc_has_arg --prefix "${@:3}"; then
+    command python -m pip install --user --break-system-packages "${@:4}"
+  else
+    command python "$@"
+  fi
+  local rc=$?
+  if [ $rc -eq 0 ] && [ "${1:-}" = "-m" ] && [ "${2:-}" = "pip" ] && [ "${3:-}" = "install" ] \
+      && ! _hc_has_arg -r "${@:4}" && ! _hc_has_arg --requirement "${@:4}" \
+      && _hc_has_install_targets "${@:4}"; then
+    _hc_append_cmd "python3 -m pip install --user" "${@:4}"
+  fi
+  return $rc
+}
+python3() {
+  if [ "${1:-}" = "-m" ] && [ "${2:-}" = "pip" ] && [ "${3:-}" = "install" ] && [ -z "${VIRTUAL_ENV:-}" ] && ! _hc_has_arg --user "${@:3}" && ! _hc_has_arg --prefix "${@:3}"; then
+    command python3 -m pip install --user --break-system-packages "${@:4}"
+  else
+    command python3 "$@"
+  fi
+  local rc=$?
+  if [ $rc -eq 0 ] && [ "${1:-}" = "-m" ] && [ "${2:-}" = "pip" ] && [ "${3:-}" = "install" ] \
+      && ! _hc_has_arg -r "${@:4}" && ! _hc_has_arg --requirement "${@:4}" \
+      && _hc_has_install_targets "${@:4}"; then
+    _hc_append_cmd "python3 -m pip install --user" "${@:4}"
   fi
   return $rc
 }
 npm() {
   command npm "$@"
   local rc=$?
-  if [ $rc -eq 0 ] && [ "${1:-}" = "install" ] && { [ "${2:-}" = "-g" ] || [ "${2:-}" = "--global" ]; }; then
+  if [ $rc -eq 0 ] && { [ "${1:-}" = "install" ] || [ "${1:-}" = "i" ]; } && { [ "${2:-}" = "-g" ] || [ "${2:-}" = "--global" ]; } && _hc_has_install_targets "${@:3}"; then
     _hc_append_cmd "npm install -g" "${@:3}"
   fi
   return $rc
@@ -889,15 +1199,37 @@ npm() {
 openclaw() {
   command openclaw "$@"
   local rc=$?
-  if [ $rc -eq 0 ] && [ "${1:-}" = "plugins" ] && [ "${2:-}" = "install" ]; then
+  if [ $rc -eq 0 ] && [ "${1:-}" = "plugins" ] && [ "${2:-}" = "install" ] && _hc_has_install_targets "${@:3}"; then
     _hc_allow_openclaw_plugins "${@:3}"
     _hc_append_cmd "openclaw plugins install" "${@:3}"
   fi
   return $rc
 }
+# uv pip install — increasingly popular fast pip replacement
+uv() {
+  command uv "$@"
+  local rc=$?
+  # Only capture: uv pip install ... (not uv pip sync, uv add, etc.)
+  # Skip if -r/--requirements flag present (file won't exist on next boot)
+  if [ $rc -eq 0 ] && [ "${1:-}" = "pip" ] && [ "${2:-}" = "install" ] \
+      && ! _hc_has_arg -r "${@:3}" && ! _hc_has_arg --requirements "${@:3}" \
+      && _hc_has_install_targets "${@:3}"; then
+    _hc_append_cmd "uv pip install" "${@:3}"
+  fi
+  return $rc
+}
+# pipx — isolated tool installs
+pipx() {
+  command pipx "$@"
+  local rc=$?
+  if [ $rc -eq 0 ] && [ "${1:-}" = "install" ] && _hc_has_install_targets "${@:2}"; then
+    _hc_append_cmd "pipx install" "${@:2}"
+  fi
+  return $rc
+}
 BASHRC
 cat > /home/node/.profile <<'PROFILE'
-[ -f ~/.bashrc ] && . ~/.bashrc
+[ -n "${BASH_VERSION:-}" ] && [ -f ~/.bashrc ] && . ~/.bashrc
 PROFILE
 echo "Shell capture wrappers ready."
 
@@ -935,7 +1267,7 @@ hc_run_startup_command() {
 
   echo "[startup:${source_label}] $command_text"
   set +e
-  bash -lc "$command_text"
+  HUGGINGCLAW_CAPTURE_DISABLE=1 bash -lc "$command_text"
   local rc=$?
   set -e
   if [ "$rc" -eq 0 ]; then
@@ -959,6 +1291,7 @@ hc_run_startup_script() {
     # Load HuggingClaw's install wrappers for env-provided scripts too, so
     # `apt install`, `pip install`, `npm install -g`, and OpenClaw plugin
     # installs behave the same way as they do in the interactive shell.
+    echo 'export HUGGINGCLAW_CAPTURE_DISABLE=1'
     echo '[ -f /home/node/.bashrc ] && . /home/node/.bashrc'
     printf '%s\n' "$script_text"
   } > "$script_file"
@@ -1076,7 +1409,7 @@ fi
 if [ -n "${HUGGINGCLAW_PIP_PACKAGES:-}" ]; then
   echo "Installing Python packages from HUGGINGCLAW_PIP_PACKAGES..."
   read -r -a HC_PIP_PACKAGES <<< "$HUGGINGCLAW_PIP_PACKAGES"
-  if python3 -m pip install --user "${HC_PIP_PACKAGES[@]}"; then
+  if python3 -m pip install --user --break-system-packages "${HC_PIP_PACKAGES[@]}"; then
     echo "HUGGINGCLAW_PIP_PACKAGES install complete."
   else
     HC_STARTUP_FAILURES=$((HC_STARTUP_FAILURES + 1))
@@ -1103,6 +1436,9 @@ if [ -n "${HUGGINGCLAW_OPENCLAW_PLUGINS:-}" ]; then
     echo "ERROR: HUGGINGCLAW_OPENCLAW_PLUGINS install failed: ${HUGGINGCLAW_OPENCLAW_PLUGINS}" >&2
   fi
 fi
+
+# ── Fix config before running startup commands ──
+openclaw doctor --fix || true
 
 # ── Arbitrary startup commands from HF Variables/Secrets ──
 # Recommended: use one variable, HUGGINGCLAW_RUN, as a full bash script. If the
@@ -1165,6 +1501,38 @@ sync_before_gateway_restart() {
     echo "Warning: could not sync settled state before gateway restart"
 }
 
+start_background_devdata_sync() {
+  if [ "$DEV_MODE_ENABLED" != "true" ]; then
+    return 0
+  fi
+  if [ "$DEVDATA_ENABLED" != "true" ]; then
+    echo "DevData  : disabled by DEVDATA=${DEVDATA_RAW}"
+    return 0
+  fi
+  if [ -z "${HF_TOKEN:-}" ]; then
+    echo "DevData  : disabled (HF_TOKEN missing)"
+    return 0
+  fi
+  if [ "${DEVDATA_DATASET_NAME:-huggingclaw-devdata}" = "${BACKUP_DATASET_NAME:-huggingclaw-backup}" ]; then
+    echo "DevData  : disabled (DEVDATA_DATASET_NAME must be separate from BACKUP_DATASET_NAME)"
+    return 0
+  fi
+  if [ ! -f "/home/node/app/jupyter-devdata-sync.py" ]; then
+    echo "DevData  : script missing; skipped"
+    return 0
+  fi
+  # BUG FIX #1: Guard against spawning a second devdata-sync process on every
+  # gateway restart. Without this check, each restart launched a fresh
+  # jupyter-devdata-sync.py which called restore_once() while JupyterLab was
+  # already running, corrupting its runtime state and killing it.
+  if [ -n "${DEVDATA_SYNC_PID:-}" ] && kill -0 "$DEVDATA_SYNC_PID" 2>/dev/null; then
+    return 0
+  fi
+  echo "DevData  : enabled (dataset=${DEVDATA_DATASET_NAME:-huggingclaw-devdata})"
+  python3 -u /home/node/app/jupyter-devdata-sync.py >> /tmp/devdata-sync.log 2>&1 &
+  DEVDATA_SYNC_PID=$!
+}
+
 start_background_sync_once() {
   [ -n "${HF_TOKEN:-}" ] || return 0
 
@@ -1172,7 +1540,7 @@ start_background_sync_once() {
     return 0
   fi
 
-  python3 -u /home/node/app/openclaw-sync.py loop &
+  python3 -u /home/node/app/openclaw-sync.py loop >> /tmp/workspace-sync.log 2>&1 &
   SYNC_LOOP_PID=$!
 }
 
@@ -1189,6 +1557,31 @@ start_guardian_once() {
 }
 
 while true; do
+  # Check health-server process - restart if died unexpectedly
+  if [ -n "${HEALTH_PID:-}" ] && ! kill -0 "$HEALTH_PID" 2>/dev/null; then
+    echo "Warning: health-server exited (PID $HEALTH_PID dead); restarting..."
+    node /home/node/app/health-server.js &
+    HEALTH_PID=$!
+    echo "Health server restarted (PID: $HEALTH_PID)"
+  fi
+
+  # Check JupyterLab process - restart if died unexpectedly
+  if [ "$RUNTIME_JUPYTER_ENABLED" = "true" ]; then
+    if [ -n "${JUPYTER_PID:-}" ]; then
+      if ! kill -0 "$JUPYTER_PID" 2>/dev/null; then
+        echo "Warning: JupyterLab exited (PID $JUPYTER_PID dead); checking log..."
+        tail -5 /tmp/jupyterlab.log 2>/dev/null || echo "No log file"
+        echo "Attempting JupyterLab restart..."
+        unset JUPYTER_PID
+        start_jupyter_once
+      fi
+    else
+      # First start
+      start_jupyter_once
+    fi
+  fi
+
+  openclaw doctor --fix || true
   echo "Launching OpenClaw gateway on port 7860..."
 
   GATEWAY_ARGS=(gateway run --port 7860 --bind lan)
@@ -1225,7 +1618,9 @@ while true; do
     echo "Gateway failed to start. Last 30 lines of log:"
     echo "────────────────────────────────────────────"
     tail -30 /home/node/.openclaw/gateway.log
-    exit 1
+    echo "Gateway failed — JupyterLab and env-builder still running. Retrying in 10s..."
+    sleep 10
+    continue
   fi
 
   # 11. Start WhatsApp Guardian after the gateway is accepting connections
@@ -1238,6 +1633,7 @@ while true; do
   # config edits can make OpenClaw exit/reload, and the gateway loop below will
   # relaunch it without rerunning all startup code.
   start_background_sync_once
+  start_background_devdata_sync
 
   set +e
   wait "$GATEWAY_PID"
@@ -1249,7 +1645,8 @@ while true; do
   GATEWAY_RESTART_COUNT=$((GATEWAY_RESTART_COUNT + 1))
   if [ "$GATEWAY_MAX_RESTARTS" != "0" ] && [ "$GATEWAY_RESTART_COUNT" -ge "$GATEWAY_MAX_RESTARTS" ]; then
     echo "Gateway exited with code ${GATEWAY_EXIT_CODE}; restart limit (${GATEWAY_MAX_RESTARTS}) reached."
-    exit "$GATEWAY_EXIT_CODE"
+    echo "Gateway stopped — JupyterLab and env-builder still running."
+    break
   fi
 
   echo "Gateway exited with code ${GATEWAY_EXIT_CODE}; restarting in ${GATEWAY_RESTART_DELAY}s..."

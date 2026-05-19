@@ -1,12 +1,17 @@
 ---
 title: HuggingClaw
 emoji: 🦞
-colorFrom: blue
-colorTo: purple
+colorFrom: red
+colorTo: blue
 sdk: docker
 app_port: 7861
-pinned: true
+pinned: false
 license: mit
+tags:
+  - openclaw
+  - jupyterlab
+  - terminal
+  - llm-gateway
 secrets:
   - name: LLM_API_KEY
     description: "Your LLM provider API key (e.g. Anthropic, OpenAI, Google, OpenRouter)."
@@ -14,6 +19,8 @@ secrets:
     description: "Model ID to use, e.g. google/gemini-2.5-flash or openai/gpt-4o."
   - name: GATEWAY_TOKEN
     description: "Strong token to secure your OpenClaw Control UI (generate: openssl rand -hex 32)."
+  - name: JUPYTER_TOKEN
+    description: "Optional strong token for the JupyterLab terminal at /terminal/ (defaults to huggingface)."
   - name: CLOUDFLARE_WORKERS_TOKEN
     description: "Cloudflare API token — auto-creates a Worker proxy and KeepAlive monitor."
   - name: TELEGRAM_ALLOWED_USERS
@@ -32,7 +39,7 @@ secrets:
 [![HF Space](https://img.shields.io/badge/🤗%20HuggingFace-Space-blue?style=flat-square)](https://huggingface.co/spaces)
 [![OpenClaw](https://img.shields.io/badge/OpenClaw-Gateway-red?style=flat-square)](https://github.com/openclaw/openclaw)
 
-**Your always-on AI assistant — free, no server needed.** HuggingClaw runs [OpenClaw](https://openclaw.ai) on HuggingFace Spaces, giving you a 24/7 AI chat assistant on Telegram and WhatsApp. It works with *any* large language model (LLM) – Claude, ChatGPT, Gemini, etc. – and even supports custom models via [OpenRouter](https://openrouter.ai). Deploy in minutes on the free HF Spaces tier (2 vCPU, 16GB RAM, 50GB) with automatic workspace backup to a HuggingFace Dataset so your chat history and settings persist across restarts.
+**Your always-on AI assistant — free, no server needed.** This merged Space runs [OpenClaw](https://openclaw.ai) plus a Hugging Face-style JupyterLab terminal on one HF Spaces port, giving you a 24/7 AI chat assistant on Telegram and WhatsApp. It works with *any* large language model (LLM) – Claude, ChatGPT, Gemini, etc. – and even supports custom models via [OpenRouter](https://openrouter.ai). Deploy in minutes on the free HF Spaces tier (2 vCPU, 16GB RAM, 50GB) with automatic workspace backup to a HuggingFace Dataset so your chat history and settings persist across restarts.
 
 ## Table of Contents
 
@@ -49,6 +56,8 @@ secrets:
 - [🤖 LLM Providers](#-llm-providers)
 - [💻 Local Development](#-local-development)
 - [🔗 CLI Access](#-cli-access)
+- [💻 JupyterLab Terminal](#-jupyterlab-terminal)
+- [🔍 Merge Comparison](#-merge-comparison)
 - [🏗️ Architecture](#-architecture)
 - [💓 Staying Alive](#-staying-alive)
 - [🐛 Troubleshooting](#-troubleshooting)
@@ -69,6 +78,7 @@ secrets:
 - 📊 **Visual Dashboard:** Beautiful Web UI to monitor uptime, sync status, and active models.
 - 🔔 **Webhooks:** Get notified on restarts or backup failures via standard webhooks.
 - 🔐 **Flexible Auth:** Secure the Control UI with either a gateway token or password.
+- 💻 **Optional Dev Terminal:** JupyterLab is available at `/terminal/` only when `DEV_MODE=true` (disabled by default).
 - 🏠 **100% HF-Native:** Runs entirely on HuggingFace’s free infrastructure (2 vCPU, 16GB RAM).
 
 ## 🎥 Video Tutorial
@@ -94,7 +104,7 @@ Navigate to your new Space's **Settings**, scroll down to the **Variables and se
 > [!TIP]
 > HuggingClaw is completely flexible! You only need these three secrets to get started. You can set other secrets later.
 
-Optional: if you want to pin a specific OpenClaw release instead of `latest`, add `OPENCLAW_VERSION` under **Variables** in your Space settings. For Docker Spaces, HF passes Variables as build args during image build, so this should be a Variable, not a Secret.
+Optional: set `DEV_MODE=true` (Variable) to enable JupyterLab support and install Jupyter dependencies at build time. You can also set `JUPYTER_TOKEN` as a Secret to replace the default terminal token (`huggingface`). If you want to pin a specific OpenClaw release instead of `latest`, add `OPENCLAW_VERSION` under **Variables** in your Space settings. For Docker Spaces, HF passes Variables as build args during image build, so these should be Variables, not Secrets (except tokens).
 
 ### Step 3: Deploy & Run
 
@@ -348,6 +358,30 @@ openclaw channels login --gateway https://YOUR_SPACE_NAME.hf.space
 # When prompted, enter your GATEWAY_TOKEN
 ```
 
+## 💻 JupyterLab Terminal
+
+The merged Space includes the Hugging Face JupyterLab template behavior inside the same container:
+
+| Path | Service | Internal Port | Notes |
+| :--- | :--- | :--- | :--- |
+| `/` | HuggingClaw dashboard | `7861` | Public HF Spaces entrypoint |
+| `/app/` | OpenClaw Control UI | `7860` | Mounted behind the local reverse proxy |
+| `/terminal/` | JupyterLab terminal (DEV_MODE only) | `8888` | Available only when `DEV_MODE=true`; token login uses `JUPYTER_TOKEN` (default `huggingface`) |
+
+When enabled, the terminal notebook root is `/home/node`, so you can inspect HuggingClaw files, logs, workspace state, and runtime scripts from the browser.
+
+> [!IMPORTANT]
+> For real deployments, set a strong `JUPYTER_TOKEN` secret. The `huggingface` default exists only to match the duplicateable Hugging Face JupyterLab template.
+
+## 🔍 Merge Comparison
+
+This repository is a merge of two sources:
+
+- `anurag162008/HuggingClaw`: OpenClaw gateway, dashboard, Cloudflare proxy/keep-alive, Telegram/WhatsApp helpers, backup sync, key rotation, docs, and security metadata.
+- Hugging Face `SpacesExamples/jupyterlab` template: JupyterLab Docker behavior, token login UX, Hugging Face-branded login template, pinned Jupyter packages, and Git LFS defaults for large model/data artifacts.
+
+The main merge-specific change is the single-port router: HF Spaces exposes `7861`, while the router keeps OpenClaw at `/app/` and JupyterLab at `/terminal/` without leaking internal redirects such as `http://127.0.0.1:8888/...`.
+
 ## 🏗️ Architecture
 
 HuggingClaw uses a multi-layered approach to ensure stability and persistence on Hugging Face's ephemeral infrastructure.
@@ -355,8 +389,9 @@ HuggingClaw uses a multi-layered approach to ensure stability and persistence on
 <details>
 <summary><b>Click to view technical details</b></summary>
 
-- **Dashboard (`/`)**: Management, monitoring, and keep-alive tools.
-- **Control UI (`/gateway`)**: Secure interface for managing agents and channels.
+- **Dashboard (`/`)**: Management, monitoring, and keep-alive tools (terminal controls appear only in DEV mode).
+- **Control UI (`/app/`)**: Secure interface for managing agents and channels, proxied to the OpenClaw gateway on internal port `7860`.
+- **JupyterLab Terminal (`/terminal/`)**: Browser terminal/notebook server on internal port `8888` (DEV mode only).
 - **Health Check (`/health`)**: Endpoint for uptime monitoring and readiness probes.
 - **Sync Engine**: Python background process managing HF Dataset persistence.
 - **Transparent Proxy**: Interceptor for requests to blocked domains (Telegram, etc.).
@@ -367,12 +402,15 @@ HuggingClaw uses a multi-layered approach to ensure stability and persistence on
 2. Resolve backup namespace and restore workspace from HF Dataset.
 3. Generate `openclaw.json` configuration.
 4. Launch background tasks (auto-sync, channel helpers).
-5. Start OpenClaw gateway and listen for connections.
+5. Start the local dashboard/reverse proxy and OpenClaw gateway (JupyterLab starts only when `DEV_MODE=true`).
 
 </details>
 
 ## 🐛 Troubleshooting
 
+- **Private Space 404:** If your Space is private, raw `https://<space>.hf.space/app/` or `/terminal/` links can show Hugging Face's own 404 page when opened outside the embedded App session. Open the Space's **App** tab first, then use the in-page dashboard buttons for `/app/` and `/terminal/`.
+- **Terminal 404 or redirect loop:** Open `/terminal/` with the trailing slash from the dashboard/App tab, rebuild after Dockerfile changes, and confirm `JUPYTER_TOKEN` is set correctly if you changed the default.
+- **Control UI 404:** Open `/app/` with the trailing slash from the dashboard/App tab; the reverse proxy rewrites backend redirects into this mount path.
 - **Missing secrets:** Ensure `LLM_API_KEY`, `LLM_MODEL`, and `GATEWAY_TOKEN` are set in your Space **Settings → Secrets**.
 - **Telegram bot issues:** Verify your `TELEGRAM_BOT_TOKEN`. Check Space logs for lines like `📱 Enabling Telegram`.
 - **Backup restore failing:** Make sure `HF_TOKEN` is valid and has write access to your HF account dataset. Set `HF_USERNAME` only if auto-detection is not available in your environment.
@@ -397,9 +435,9 @@ Similar projects by [@somratpro](https://github.com/somratpro) — all free, one
 
 ## 📚 Links
 
-- [OpenClaw Docs](https://docs.openclaw.ai)  
-- [OpenClaw GitHub](https://github.com/openclaw/openclaw)  
-- [HuggingFace Spaces Docs](https://huggingface.co/docs/hub/spaces)  
+- [OpenClaw Docs](https://docs.openclaw.ai)
+- [OpenClaw GitHub](https://github.com/openclaw/openclaw)
+- [HuggingFace Spaces Docs](https://huggingface.co/docs/hub/spaces)
 
 ## ❤️ Support
 
@@ -422,4 +460,4 @@ Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for gui
 
 MIT — see [LICENSE](LICENSE) for details.
 
-*Made with ❤️ by [@somratpro](https://github.com/somratpro) for the OpenClaw community.*  
+*Made with ❤️ by [@somratpro](https://github.com/somratpro) for the OpenClaw community.*
