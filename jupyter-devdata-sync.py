@@ -174,6 +174,7 @@ def is_jupyter_running(port: int = 8888) -> bool:
         return False
 
 def restore_once(api, rid: str):
+    from huggingface_hub import snapshot_download
     from huggingface_hub.errors import RepositoryNotFoundError
     tmp = Path(tempfile.mkdtemp(prefix="devdata-restore-"))
     try:

@@ -72,7 +72,6 @@ if (_spacPrivacyEnv === "public") {
   SPACE_IS_PRIVATE = false;
   _privacyDetectionDone = true;
   console.log("[health-server] Space privacy: public (SPACE_PRIVACY env var override)");
-  privacyDetectionReady.then ? void 0 : null;
   _privacyDetectionResolve && _privacyDetectionResolve();
 } else if (_spacPrivacyEnv === "private") {
   // User explicitly set SPACE_PRIVACY=private — skip API call entirely

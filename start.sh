@@ -359,8 +359,10 @@ CONFIG_JSON=$(jq \
   --arg fileLevel "$OPENCLAW_FILE_LOG_LEVEL" \
   --arg consoleLevel "$OPENCLAW_CONSOLE_LOG_LEVEL" \
   --arg consoleStyle "$OPENCLAW_CONSOLE_LOG_STYLE" \
+  --arg port "$GATEWAY_PORT" \
   '.gateway.auth.token = $token
    | .agents.defaults.model = $model
+   | .gateway.port = ($port | tonumber)
    | .logging.level = $fileLevel
    | .logging.consoleLevel = $consoleLevel
    | .logging.consoleStyle = $consoleStyle' <<<"$CONFIG_JSON")
@@ -373,7 +375,7 @@ CUSTOM_MODEL_NAME="${CUSTOM_MODEL_NAME:-$CUSTOM_MODEL_ID}"
 CUSTOM_API_KEY="${CUSTOM_API_KEY:-$LLM_API_KEY}"
 CUSTOM_API_TYPE="${CUSTOM_API_TYPE:-openai-completions}"
 CUSTOM_CONTEXT_WINDOW="${CUSTOM_CONTEXT_WINDOW:-128000}"
-CUSTOM_MAX_TOKENS="${CUSTOM_MAX_TOKENS:-500}"
+CUSTOM_MAX_TOKENS="${CUSTOM_MAX_TOKENS:-8192}"
 
 if [ -n "$CUSTOM_PROVIDER_NAME" ] || [ -n "$CUSTOM_BASE_URL" ] || [ -n "$CUSTOM_MODEL_ID" ]; then
   CUSTOM_PROVIDER_NORMALIZED=$(printf '%s' "$CUSTOM_PROVIDER_NAME" | tr '[:upper:]' '[:lower:]')
@@ -715,6 +717,10 @@ WHATSAPP_CONFIG_ENABLED=false
 if [ "$WHATSAPP_ENABLED_NORMALIZED" = "true" ]; then
   WHATSAPP_CONFIG_ENABLED=true
 fi
+TELEGRAM_CONFIG_ENABLED=false
+if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
+  TELEGRAM_CONFIG_ENABLED=true
+fi
 if [ -f "$EXISTING_CONFIG" ]; then
   echo "Restored config found — patching required fields and runtime channel/plugin toggles..."
   PATCHED=$(jq \
@@ -729,6 +735,7 @@ if [ -f "$EXISTING_CONFIG" ]; then
     --argjson consoleStyleConfigured "$OPENCLAW_CONSOLE_LOG_STYLE_CONFIGURED" \
     --argjson whatsappConfigured "$WHATSAPP_ENABLED_CONFIGURED" \
     --argjson whatsappEnabled "$WHATSAPP_CONFIG_ENABLED" \
+    --argjson telegramConfigured "$TELEGRAM_CONFIG_ENABLED" \
     '(.channels.whatsapp // {}) as $existingWhatsapp
      | .gateway.auth.token = $token
      | .agents.defaults.model = $model
@@ -750,6 +757,13 @@ if [ -f "$EXISTING_CONFIG" ]; then
          | del(.channels.whatsapp)
        else
          .
+       end
+     | if $telegramConfigured then
+         .channels.telegram = (($desired.channels.telegram // {}) * (.channels.telegram // {}))
+         | .channels.telegram.botToken = $desired.channels.telegram.botToken
+       else
+         del(.channels.telegram)
+         | .plugins.entries.telegram.enabled = false
        end' \
     "$EXISTING_CONFIG" 2>/dev/null)
 
