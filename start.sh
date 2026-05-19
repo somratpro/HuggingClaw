@@ -598,15 +598,11 @@ CONFIG_JSON=$(jq \
 
 if [ "$BROWSER_SHOULD_ENABLE" = "true" ]; then
   CONFIG_JSON=$(jq \
-    --arg execPath "$BROWSER_EXECUTABLE_PATH" \
     '.browser = {
        "enabled": true,
        "defaultProfile": "openclaw",
        "headless": true,
        "noSandbox": true,
-       "executablePath": $execPath,
-       "localLaunchTimeoutMs": 45000,
-       "localCdpReadyTimeoutMs": 30000,
        "extraArgs": [
          "--no-sandbox",
          "--disable-setuid-sandbox",
