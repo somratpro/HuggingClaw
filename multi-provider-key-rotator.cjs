@@ -87,6 +87,13 @@ const PROVIDERS = [
     envSingular:'ZAI_API_KEY',
   },
   {
+    name:       'kimi-coding',
+    // kimi-coding routes through api.moonshot.cn; dedicated entry so KIMI_API_KEYS pool is used
+    hostname:   /(?:^|\.)api\.moonshot\.cn$/i,
+    envPlural:  'KIMI_API_KEYS',
+    envSingular:'KIMI_API_KEY',
+  },
+  {
     name:       'moonshot',
     hostname:   /(?:^|\.)api\.moonshot\.cn$/i,
     envPlural:  'MOONSHOT_API_KEYS',
@@ -191,6 +198,12 @@ const PROVIDERS = [
     hostname:   /(?:^|\.)dashscope\.aliyuncs\.com$/i,
     envPlural:  'MODELSTUDIO_API_KEYS',
     envSingular:'MODELSTUDIO_API_KEY',
+  },
+  {
+    name:        'synthetic',
+    hostname:    /(?:^|\.)synthetic\.local$/i,
+    envPlural:   'SYNTHETIC_API_KEYS',
+    envSingular: 'SYNTHETIC_API_KEY',
   },
 
 ];
@@ -320,7 +333,25 @@ function patchFetch() {
             // Gemini: key URL query param mein jaata hai, Bearer nahi
             const url = new URL(typeof input === 'string' ? input : input.url);
             url.searchParams.set('key', key);
-            input = typeof input === 'string' ? url.toString() : new Request(url.toString(), input);
+            if (typeof input === 'string') {
+              input = url.toString();
+            } else {
+              // Do NOT pass the Request object as init — that clones (consumes) the body stream.
+              // Instead patch only the URL via init object; fetch spec merges headers from Request.
+              init = {
+                method: input.method,
+                headers: input.headers,
+                body: input.body,
+                mode: input.mode,
+                credentials: input.credentials,
+                cache: input.cache,
+                redirect: input.redirect,
+                referrer: input.referrer,
+                integrity: input.integrity,
+                ...init,
+              };
+              input = url.toString();
+            }
           } else {
             const headers        = init.headers || (input && input.headers) || undefined;
             const patchedHeaders = setAuthHeader(headers, key);

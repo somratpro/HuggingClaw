@@ -42,6 +42,9 @@ try:
             continue
         if str(key) in {"HUGGINGCLAW_ENV_BUNDLE", "ENV_BUNDLE"}:
             continue
+        if str(key) == "OPENCLAW_VERSION":
+            print("Warning: OPENCLAW_VERSION from env bundle is ignored (build-time only; set HF Variable and rebuild).", file=sys.stderr)
+            continue
         if os.environ.get(str(key), ""):
             continue
         if value is None or isinstance(value, (dict, list)):
@@ -105,6 +108,9 @@ DEVDATA_ENABLED=true
 if ! hc_is_true "$DEVDATA_NORMALIZED"; then
   DEVDATA_ENABLED=false
 fi
+# On HF Spaces, browser is disabled by default (no display server).
+# To enable: set BROWSER_PLUGIN_MODE=enabled as an HF Space secret.
+# WARNING: requires at least CPU Upgrade tier (2 vCPU / 16GB RAM).
 if [ -n "${SPACE_HOST:-}" ]; then
   OPENCLAW_CONSOLE_LOG_LEVEL="${OPENCLAW_CONSOLE_LOG_LEVEL:-warn}"
   OPENCLAW_FILE_LOG_LEVEL="${OPENCLAW_FILE_LOG_LEVEL:-info}"
@@ -197,7 +203,7 @@ case "$LLM_PROVIDER" in
   byteplus|byteplus-plan)       export BYTEPLUS_API_KEY="$LLM_API_KEY" ;;
   qianfan)                      export QIANFAN_API_KEY="$LLM_API_KEY" ;;
   # ── Western Providers ──
-  mistral|mistralai)            export MISTRAL_API_KEY="$LLM_API_KEY" ;;
+  mistral)                      export MISTRAL_API_KEY="$LLM_API_KEY" ;;
   xai|x-ai)                     export XAI_API_KEY="$LLM_API_KEY" ;;
   nvidia)                       export NVIDIA_API_KEY="$LLM_API_KEY" ;;
   cohere)                       export COHERE_API_KEY="$LLM_API_KEY" ;;
@@ -208,8 +214,18 @@ case "$LLM_PROVIDER" in
   venice)                       export VENICE_API_KEY="$LLM_API_KEY" ;;
   synthetic)                    export SYNTHETIC_API_KEY="$LLM_API_KEY" ;;
   github-copilot)               export COPILOT_GITHUB_TOKEN="$LLM_API_KEY" ;;
+  llama-3.*|llama-4.*|mixtral-*|gemma-*)
+    export GROQ_API_KEY="$LLM_API_KEY"
+    echo "Note: bare Groq model '$LLM_MODEL' detected; mapped LLM_API_KEY → GROQ_API_KEY. Use 'groq/${LLM_MODEL}' prefix to be explicit." ;;
+  mistral-*|codestral-*|devstral-*|voxtral-*)
+    export MISTRAL_API_KEY="$LLM_API_KEY"
+    echo "Note: bare Mistral model '$LLM_MODEL' detected; mapped LLM_API_KEY → MISTRAL_API_KEY. Use 'mistral/${LLM_MODEL}' prefix to be explicit." ;;
+  moonshotai|meta-llama|deepseek-ai|MiniMaxAI|minimax-ai|Qwen|zai-org|mistralai|google)
+    echo "Warning: LLM_MODEL='$LLM_MODEL' uses sub-provider prefix '$LLM_PROVIDER'. This is a router-namespaced model (Together/OpenRouter). Mapping LLM_API_KEY → TOGETHER_API_KEY. If using OpenRouter, also set OPENROUTER_API_KEY as a separate secret."
+    export TOGETHER_API_KEY="${TOGETHER_API_KEY:-$LLM_API_KEY}" ;;
   # ── Fallback: Anthropic (default) ──
   *)
+    echo "Warning: Unknown provider prefix '$LLM_PROVIDER' in LLM_MODEL='$LLM_MODEL'. Defaulting to ANTHROPIC_API_KEY. If using a router-namespaced model (e.g. moonshotai/Kimi-K2.5), set TOGETHER_API_KEY or OPENROUTER_API_KEY as a separate secret."
     export ANTHROPIC_API_KEY="$LLM_API_KEY"
     ;;
 esac
@@ -326,7 +342,7 @@ CONFIG_JSON=$(cat <<'CONFIGEOF'
 {
   "gateway": {
     "mode": "local",
-    "port": 7860,
+    "port": "${GATEWAY_PORT}",
     "bind": "lan",
     "auth": {
       "token": ""
@@ -359,8 +375,10 @@ CONFIG_JSON=$(jq \
   --arg fileLevel "$OPENCLAW_FILE_LOG_LEVEL" \
   --arg consoleLevel "$OPENCLAW_CONSOLE_LOG_LEVEL" \
   --arg consoleStyle "$OPENCLAW_CONSOLE_LOG_STYLE" \
+  --arg port "$GATEWAY_PORT" \
   '.gateway.auth.token = $token
    | .agents.defaults.model = $model
+   | .gateway.port = ($port | tonumber)
    | .logging.level = $fileLevel
    | .logging.consoleLevel = $consoleLevel
    | .logging.consoleStyle = $consoleStyle' <<<"$CONFIG_JSON")
@@ -373,7 +391,7 @@ CUSTOM_MODEL_NAME="${CUSTOM_MODEL_NAME:-$CUSTOM_MODEL_ID}"
 CUSTOM_API_KEY="${CUSTOM_API_KEY:-$LLM_API_KEY}"
 CUSTOM_API_TYPE="${CUSTOM_API_TYPE:-openai-completions}"
 CUSTOM_CONTEXT_WINDOW="${CUSTOM_CONTEXT_WINDOW:-128000}"
-CUSTOM_MAX_TOKENS="${CUSTOM_MAX_TOKENS:-500}"
+CUSTOM_MAX_TOKENS="${CUSTOM_MAX_TOKENS:-8192}"
 
 if [ -n "$CUSTOM_PROVIDER_NAME" ] || [ -n "$CUSTOM_BASE_URL" ] || [ -n "$CUSTOM_MODEL_ID" ]; then
   CUSTOM_PROVIDER_NORMALIZED=$(printf '%s' "$CUSTOM_PROVIDER_NAME" | tr '[:upper:]' '[:lower:]')
@@ -464,8 +482,10 @@ inject_provider_models_from_env() {
   CONFIG_JSON=$(jq \
     --arg provider "$provider" \
     --argjson models "$models_json" \
-    '.models.mode = "merge"
-     | .models.providers[$provider] = ((.models.providers[$provider] // {}) + {models: $models})' <<<"$CONFIG_JSON")
+    'if .models.providers[$provider] then
+       .models.mode = "merge"
+       | .models.providers[$provider].models = $models
+     else . end' <<<"$CONFIG_JSON")
 }
 
 # Built-in provider model envs (optional)
@@ -510,12 +530,76 @@ inject_provider_models_from_env "github-copilot" "GITHUB_COPILOT_MODELS" "COPILO
 
 # Browser configuration (managed local Chromium in HF/Docker)
 BROWSER_EXECUTABLE_PATH=""
-for candidate in /usr/bin/chromium /usr/bin/chromium-browser /snap/bin/chromium; do
+BROWSER_WRAPPER_PATH=""
+HAS_FILE_CMD=false
+if command -v file >/dev/null 2>&1; then
+  HAS_FILE_CMD=true
+fi
+
+ensure_chromium_for_browser_plugin() {
+  # Enforce Chromium availability when browser plugin is explicitly enabled.
+  [ "$BROWSER_PLUGIN_MODE" = "enabled" ] || return 0
+  for candidate in /usr/lib/chromium/chromium /usr/bin/chromium /usr/bin/chromium-browser; do
+    [ -x "$candidate" ] && return 0
+  done
+  if [ "$HAS_FILE_CMD" != "true" ]; then
+    echo "BROWSER_PLUGIN_MODE=enabled and 'file' command is missing; attempting runtime install..."
+    if _hc_apt_install file; then
+      HAS_FILE_CMD=true
+      echo "'file' command installed via apt-get."
+    else
+      echo "Warning: could not install 'file'; continuing with executable-path fallback checks."
+    fi
+  fi
+  echo "BROWSER_PLUGIN_MODE=enabled but Chromium is missing; attempting runtime install..."
+  if _hc_apt_install chromium; then
+    echo "Chromium installed via apt-get."
+    return 0
+  fi
+  if _hc_apt_install chromium-browser; then
+    echo "Chromium browser package installed via apt-get."
+    return 0
+  fi
+  echo "ERROR: Browser plugin is enabled, but Chromium install failed. Disable browser plugin or rebuild image with Chromium preinstalled." >&2
+  return 1
+}
+HC_STARTUP_FAILURES=0
+ensure_chromium_for_browser_plugin || HC_STARTUP_FAILURES=$((HC_STARTUP_FAILURES + 1))
+
+# On Debian/Ubuntu, /usr/bin/chromium is often a shell wrapper while the real
+# ELF binary lives under /usr/lib/chromium/*. Prefer a real ELF binary, then
+# fall back to wrapper launchers (Playwright/OpenClaw can execute those too).
+for candidate in \
+    /usr/lib/chromium/chromium \
+    /usr/lib/chromium-browser/chromium-browser \
+    /usr/bin/chromium \
+    /usr/bin/chromium-browser \
+    /snap/bin/chromium; do
   if [ -x "$candidate" ]; then
-    BROWSER_EXECUTABLE_PATH="$candidate"
-    break
+    if [ "$HAS_FILE_CMD" = "true" ]; then
+      if file "$candidate" 2>/dev/null | grep -q "ELF"; then
+        BROWSER_EXECUTABLE_PATH="$candidate"
+        break
+      fi
+    else
+      # Minimal images may not ship `file`; accept the first executable path.
+      BROWSER_EXECUTABLE_PATH="$candidate"
+      break
+    fi
+    if [ -z "$BROWSER_WRAPPER_PATH" ]; then
+      BROWSER_WRAPPER_PATH="$candidate"
+    fi
   fi
 done
+if [ -z "$BROWSER_EXECUTABLE_PATH" ] && [ -n "$BROWSER_WRAPPER_PATH" ]; then
+  BROWSER_EXECUTABLE_PATH="$BROWSER_WRAPPER_PATH"
+  echo "No ELF Chromium binary found; using launcher wrapper at $BROWSER_EXECUTABLE_PATH"
+elif [ -n "$BROWSER_EXECUTABLE_PATH" ] && [ "$HAS_FILE_CMD" != "true" ]; then
+  echo "Detected Chromium executable at $BROWSER_EXECUTABLE_PATH (ELF probe skipped: 'file' command not installed)"
+fi
+if [ -z "$BROWSER_EXECUTABLE_PATH" ]; then
+  echo "Warning: Chromium executable not found. Browser plugin will be disabled."
+fi
 
 BROWSER_SHOULD_ENABLE=false
 if [ "$BROWSER_PLUGIN_MODE" = "enabled" ] && [ -n "$BROWSER_EXECUTABLE_PATH" ] && [ -x "$BROWSER_EXECUTABLE_PATH" ]; then
@@ -567,13 +651,28 @@ CONFIG_JSON=$(jq \
 
 if [ "$BROWSER_SHOULD_ENABLE" = "true" ]; then
   CONFIG_JSON=$(jq \
-    --arg execPath "$BROWSER_EXECUTABLE_PATH" \
     '.browser = {
        "enabled": true,
        "defaultProfile": "openclaw",
        "headless": true,
        "noSandbox": true,
-       "executablePath": $execPath
+       "extraArgs": [
+         "--headless=new",
+         "--no-sandbox",
+         "--disable-setuid-sandbox",
+         "--no-zygote",
+         "--disable-dev-shm-usage",
+         "--disable-gpu",
+         "--remote-debugging-address=127.0.0.1",
+         "--disable-features=UseDBus,MediaRouter",
+         "--password-store=basic",
+         "--no-first-run",
+         "--disable-background-networking",
+         "--disable-sync",
+         "--disable-translate",
+         "--disable-notifications",
+         "--disable-speech-api"
+       ]
      }
      | .agents.defaults.sandbox.browser.allowHostControl = true' <<<"$CONFIG_JSON")
 fi
@@ -588,7 +687,7 @@ CONFIG_JSON=$(jq \
    | (if $spaceHost != "" then
         .gateway.controlUi.allowedOrigins = ["https://" + $spaceHost]
       else . end)
-   | (if $password != "" then
+   | (if ($password != "" and (.gateway.auth.token // "") == "") then
         .gateway.auth.mode = "password" | .gateway.auth.password = $password
       else . end)' <<<"$CONFIG_JSON")
 
@@ -684,6 +783,10 @@ WHATSAPP_CONFIG_ENABLED=false
 if [ "$WHATSAPP_ENABLED_NORMALIZED" = "true" ]; then
   WHATSAPP_CONFIG_ENABLED=true
 fi
+TELEGRAM_CONFIG_ENABLED=false
+if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
+  TELEGRAM_CONFIG_ENABLED=true
+fi
 if [ -f "$EXISTING_CONFIG" ]; then
   echo "Restored config found — patching required fields and runtime channel/plugin toggles..."
   PATCHED=$(jq \
@@ -698,9 +801,11 @@ if [ -f "$EXISTING_CONFIG" ]; then
     --argjson consoleStyleConfigured "$OPENCLAW_CONSOLE_LOG_STYLE_CONFIGURED" \
     --argjson whatsappConfigured "$WHATSAPP_ENABLED_CONFIGURED" \
     --argjson whatsappEnabled "$WHATSAPP_CONFIG_ENABLED" \
+    --argjson telegramConfigured "$TELEGRAM_CONFIG_ENABLED" \
     '(.channels.whatsapp // {}) as $existingWhatsapp
      | .gateway.auth.token = $token
      | .agents.defaults.model = $model
+     | .gateway.port = ($desired.gateway.port // .gateway.port)
      | if $fileLogConfigured then .logging.level = $fileLevel else . end
      | if $consoleLogConfigured then .logging.consoleLevel = $consoleLevel else . end
      | if $consoleStyleConfigured then .logging.consoleStyle = $consoleStyle else . end
@@ -719,6 +824,13 @@ if [ -f "$EXISTING_CONFIG" ]; then
          | del(.channels.whatsapp)
        else
          .
+       end
+     | if $telegramConfigured then
+         .channels.telegram = (($desired.channels.telegram // {}) * (.channels.telegram // {}))
+         | .channels.telegram.botToken = $desired.channels.telegram.botToken
+       else
+         del(.channels.telegram)
+         | .plugins.entries.telegram.enabled = false
        end' \
     "$EXISTING_CONFIG" 2>/dev/null)
 
@@ -762,7 +874,13 @@ fi
 if [ -n "${CLOUDFLARE_PROXY_URL:-}" ]; then
   echo "Proxy     : ${CLOUDFLARE_PROXY_URL}"
 fi
-RUNTIME_JUPYTER_ENABLED="$DEV_MODE_ENABLED"
+# HUGGINGCLAW_JUPYTER_ENABLED env var se override allow karo
+# (env-builder "Enable Jupyter terminal" toggle yahi set karta hai)
+if hc_is_true "${HUGGINGCLAW_JUPYTER_ENABLED:-false}"; then
+  RUNTIME_JUPYTER_ENABLED=true
+else
+  RUNTIME_JUPYTER_ENABLED="$DEV_MODE_ENABLED"
+fi
 # Add user bin to PATH for jupyter-lab (installed in Dockerfile when DEV_MODE=true)
 export PATH="$HOME/.local/bin:$PATH"
 
@@ -820,20 +938,24 @@ graceful_shutdown() {
 }
 trap graceful_shutdown SIGTERM SIGINT
 
+BROWSER_WARMED_UP=false
 warmup_browser() {
   [ "$BROWSER_SHOULD_ENABLE" = "true" ] || return 0
+  # Only warm up once — gateway restarts should not re-spawn new warmup jobs.
+  [ "$BROWSER_WARMED_UP" = "false" ] || return 0
+  BROWSER_WARMED_UP=true
 
   (
-    sleep 5
+    sleep 8
 
     local attempt
-    for attempt in 1 2 3 4 5; do
+    for attempt in 1 2 3 4 5 6; do
       if openclaw browser --browser-profile openclaw start >/dev/null 2>&1; then
         openclaw browser --browser-profile openclaw open about:blank >/dev/null 2>&1 || true
         echo "Managed browser ready."
         return 0
       fi
-      sleep 2
+      sleep 5
     done
 
     echo "Warning: managed browser warm-up did not complete; first browser action may need a retry."
@@ -843,6 +965,21 @@ warmup_browser() {
 
 # ── Start background services ──
 export LLM_MODEL="$LLM_MODEL"
+
+# ── Ensure key-rotator uses the correct HF token for huggingface.co calls ──
+# NODE_OPTIONS preloads multi-provider-key-rotator.cjs into health-server.js.
+# The rotator patches https.request and injects HUGGINGFACE_HUB_TOKEN (or
+# falls back to LLM_API_KEY) for any call to huggingface.co — including the
+# privacy-detection API call in detectSpacePrivacy(). If HUGGINGFACE_HUB_TOKEN
+# is not set (user's LLM provider is not HuggingFace), the rotator falls back
+# to LLM_API_KEY, which is the AI-provider key, NOT the HF owner token.
+# This causes a 401 on /api/spaces/${SPACE_ID} → privacy detection always
+# fails → SPACE_IS_PRIVATE stays true → public-space links never open in a
+# new tab.
+# Fix: seed HUGGINGFACE_HUB_TOKEN from HF_TOKEN when not already set.
+# HF Spaces auto-injects HF_TOKEN as the space owner's token, so this is safe.
+export HUGGINGFACE_HUB_TOKEN="${HUGGINGFACE_HUB_TOKEN:-${HF_TOKEN:-}}"
+
 # 10. Start Health Server & Dashboard
 node /home/node/app/health-server.js &
 HEALTH_PID=$!
@@ -1248,7 +1385,7 @@ fi
 # Runs user-provided boot commands one by one so failures are visible in logs.
 # By default failures are logged and boot continues; set
 # HUGGINGCLAW_STARTUP_STRICT=true to fail the Space startup on any error.
-HC_STARTUP_FAILURES=0
+# HC_STARTUP_FAILURES initialized earlier (before Chromium ensure check)
 HC_STARTUP_STRICT_NORMALIZED=$(printf '%s' "${HUGGINGCLAW_STARTUP_STRICT:-false}" | tr '[:upper:]' '[:lower:]')
 hc_run_startup_command() {
   local source_label="$1"
@@ -1427,6 +1564,11 @@ if [ -n "${HUGGINGCLAW_OPENCLAW_PLUGINS:-}" ]; then
   fi
 fi
 
+# ── Fix config before running startup commands ──
+if [ "${AUTO_DOCTOR:-false}" = "true" ]; then
+  openclaw doctor --fix || true
+fi
+
 # ── Arbitrary startup commands from HF Variables/Secrets ──
 # Recommended: use one variable, HUGGINGCLAW_RUN, as a full bash script. If the
 # value starts with base64: or b64:, the rest is decoded and run as the script.
@@ -1543,6 +1685,16 @@ start_guardian_once() {
   echo "WhatsApp Guardian started (PID: $GUARDIAN_PID)"
 }
 
+# ── Start D-Bus session (once, before gateway loop) ──
+if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
+  if command -v dbus-launch >/dev/null 2>&1; then
+    eval "$(dbus-launch --sh-syntax 2>/dev/null)" || true
+    export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-disabled:}"
+  else
+    export DBUS_SESSION_BUS_ADDRESS="disabled:"
+  fi
+fi
+
 while true; do
   # Check health-server process - restart if died unexpectedly
   if [ -n "${HEALTH_PID:-}" ] && ! kill -0 "$HEALTH_PID" 2>/dev/null; then
@@ -1568,9 +1720,12 @@ while true; do
     fi
   fi
 
-  echo "Launching OpenClaw gateway on port 7860..."
+  if [ "${AUTO_DOCTOR:-false}" = "true" ]; then
+    openclaw doctor --fix || true
+  fi
+  echo "Launching OpenClaw gateway on port ${GATEWAY_PORT}..."
 
-  GATEWAY_ARGS=(gateway run --port 7860 --bind lan)
+  GATEWAY_ARGS=(gateway run --port "${GATEWAY_PORT}" --bind lan)
   if [ "${GATEWAY_VERBOSE:-0}" = "1" ]; then
     GATEWAY_ARGS+=(--verbose)
     echo "Gateway verbose logging enabled (GATEWAY_VERBOSE=1)"
@@ -1583,13 +1738,13 @@ while true; do
   stdbuf -oL -eL openclaw "${GATEWAY_ARGS[@]}" 2>&1 | tee -a /home/node/.openclaw/gateway.log &
   GATEWAY_PID=$!
 
-  # Poll for the gateway to start listening on 7860. OpenClaw can take 20-30s
+  # Poll for the gateway to start listening on ${GATEWAY_PORT}. OpenClaw can take 20-30s
   # on cold start (plugin install + auto-restore). Bail out early if the
   # pipeline died.
   GATEWAY_READY_TIMEOUT="${GATEWAY_READY_TIMEOUT:-90}"
   ready=false
   for ((i=0; i<GATEWAY_READY_TIMEOUT; i++)); do
-    if (echo > /dev/tcp/127.0.0.1/7860) 2>/dev/null; then
+    if (echo > /dev/tcp/127.0.0.1/${GATEWAY_PORT}) 2>/dev/null; then
       ready=true
       break
     fi
@@ -1604,7 +1759,14 @@ while true; do
     echo "Gateway failed to start. Last 30 lines of log:"
     echo "────────────────────────────────────────────"
     tail -30 /home/node/.openclaw/gateway.log
-    exit 1
+    if [ "$DEV_MODE_ENABLED" = "true" ]; then
+      echo "Gateway failed — DEV_MODE active, retrying in 10s..."
+      sleep 10
+      continue
+    else
+      echo "Gateway failed — exiting."
+      exit 1
+    fi
   fi
 
   # 11. Start WhatsApp Guardian after the gateway is accepting connections
@@ -1629,7 +1791,8 @@ while true; do
   GATEWAY_RESTART_COUNT=$((GATEWAY_RESTART_COUNT + 1))
   if [ "$GATEWAY_MAX_RESTARTS" != "0" ] && [ "$GATEWAY_RESTART_COUNT" -ge "$GATEWAY_MAX_RESTARTS" ]; then
     echo "Gateway exited with code ${GATEWAY_EXIT_CODE}; restart limit (${GATEWAY_MAX_RESTARTS}) reached."
-    exit "$GATEWAY_EXIT_CODE"
+    echo "Gateway stopped — JupyterLab and env-builder still running."
+    break
   fi
 
   echo "Gateway exited with code ${GATEWAY_EXIT_CODE}; restarting in ${GATEWAY_RESTART_DELAY}s..."

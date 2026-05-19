@@ -23,9 +23,12 @@ ARG DEV_MODE=false
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     sudo \
+    file \
     ca-certificates \
     jq \
     curl \
+    dbus \
+    dbus-x11 \
     python3 \
     python3-pip \
     chromium \
@@ -107,6 +110,7 @@ RUN chmod +x /home/node/app/start.sh \
               /home/node/app/cloudflare-proxy-setup.py \
               /home/node/app/cloudflare-keepalive-setup.py \
               /home/node/app/openclaw-sync.py \
+              /home/node/app/jupyter-devdata-sync.py \
               /home/node/app/multi-provider-key-rotator.cjs
 
 USER node

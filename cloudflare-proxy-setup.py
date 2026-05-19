@@ -12,7 +12,8 @@ from pathlib import Path
 API_BASE = "https://api.cloudflare.com/client/v4"
 ENV_FILE = Path("/tmp/huggingclaw-cloudflare-proxy.env")
 DEFAULT_ALLOWED = [
-    # Messaging
+    # Messaging & social platforms — primary use-case for the Cloudflare proxy
+    # on HF Spaces (geo-restrictions on Telegram, Discord, WhatsApp, etc.).
     "api.telegram.org",
     "discord.com",
     "discordapp.com",
@@ -32,8 +33,6 @@ DEFAULT_ALLOWED = [
     # Video
     "youtube.com",
     "www.youtube.com",
-    # AI APIs
-    "api.openai.com",
     # Email HTTP APIs (SMTP ports are blocked; use these instead)
     "api.resend.com",
     "api.sendgrid.com",
@@ -43,6 +42,11 @@ DEFAULT_ALLOWED = [
     "google.com",
     "googleusercontent.com",
     "gstatic.com",
+    # NOTE: AI-provider domains (api.openai.com, api.anthropic.com, etc.) are
+    # intentionally NOT included here. Proxying AI calls routes API keys through
+    # the Cloudflare Worker without an explicit opt-in. Users who need AI API
+    # calls proxied (e.g. geo-restricted regions) can add specific domains via
+    # the CLOUDFLARE_PROXY_DOMAINS environment variable.
 ]
 
 

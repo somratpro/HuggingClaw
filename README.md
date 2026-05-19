@@ -57,7 +57,6 @@ secrets:
 - [💻 Local Development](#-local-development)
 - [🔗 CLI Access](#-cli-access)
 - [💻 JupyterLab Terminal](#-jupyterlab-terminal)
-- [🔍 Merge Comparison](#-merge-comparison)
 - [🏗️ Architecture](#-architecture)
 - [💓 Staying Alive](#-staying-alive)
 - [🐛 Troubleshooting](#-troubleshooting)
@@ -242,7 +241,7 @@ Configure password access and network restrictions:
 
 | Variable | Default | Description |
 | :--- | :--- | :--- |
-| `OPENCLAW_PASSWORD` | — | Enable simple password auth instead of token |
+| `OPENCLAW_PASSWORD` | — | Enable simple password auth instead of token (applies only when `GATEWAY_TOKEN` is empty) |
 | `TRUSTED_PROXIES` | — | Comma-separated IPs of HF proxies |
 | `ALLOWED_ORIGINS` | — | Comma-separated allowed origins for Control UI |
 | `CLOUDFLARE_KEEPALIVE_ENABLED` | `true` | Set to `false` to disable the automatic Cloudflare KeepAlive worker |
@@ -375,15 +374,6 @@ When enabled, the terminal notebook root is `/home/node`, so you can inspect Hug
 
 > [!IMPORTANT]
 > No extra secret needed — `GATEWAY_TOKEN` is automatically reused as `JUPYTER_TOKEN`. Set a separate `JUPYTER_TOKEN` secret only if you want a different terminal credential.
-
-## 🔍 Merge Comparison
-
-This repository is a merge of two sources:
-
-- `anurag162008/HuggingClaw`: OpenClaw gateway, dashboard, Cloudflare proxy/keep-alive, Telegram/WhatsApp helpers, backup sync, key rotation, docs, and security metadata.
-- Hugging Face `SpacesExamples/jupyterlab` template: JupyterLab Docker behavior, token login UX, Hugging Face-branded login template, pinned Jupyter packages, and Git LFS defaults for large model/data artifacts.
-
-The main merge-specific change is the single-port router: HF Spaces exposes `7861`, while the router keeps OpenClaw at `/app/` and JupyterLab at `/terminal/` without leaking internal redirects such as `http://127.0.0.1:8888/...`.
 
 ## 🏗️ Architecture
 
