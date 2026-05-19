@@ -203,7 +203,7 @@ case "$LLM_PROVIDER" in
   byteplus|byteplus-plan)       export BYTEPLUS_API_KEY="$LLM_API_KEY" ;;
   qianfan)                      export QIANFAN_API_KEY="$LLM_API_KEY" ;;
   # ── Western Providers ──
-  mistral|mistralai)            export MISTRAL_API_KEY="$LLM_API_KEY" ;;
+  mistral)                      export MISTRAL_API_KEY="$LLM_API_KEY" ;;
   xai|x-ai)                     export XAI_API_KEY="$LLM_API_KEY" ;;
   nvidia)                       export NVIDIA_API_KEY="$LLM_API_KEY" ;;
   cohere)                       export COHERE_API_KEY="$LLM_API_KEY" ;;
@@ -214,8 +214,18 @@ case "$LLM_PROVIDER" in
   venice)                       export VENICE_API_KEY="$LLM_API_KEY" ;;
   synthetic)                    export SYNTHETIC_API_KEY="$LLM_API_KEY" ;;
   github-copilot)               export COPILOT_GITHUB_TOKEN="$LLM_API_KEY" ;;
+  llama-3.*|llama-4.*|mixtral-*|gemma-*)
+    export GROQ_API_KEY="$LLM_API_KEY"
+    echo "Note: bare Groq model '$LLM_MODEL' detected; mapped LLM_API_KEY → GROQ_API_KEY. Use 'groq/${LLM_MODEL}' prefix to be explicit." ;;
+  mistral-*|codestral-*|devstral-*|voxtral-*)
+    export MISTRAL_API_KEY="$LLM_API_KEY"
+    echo "Note: bare Mistral model '$LLM_MODEL' detected; mapped LLM_API_KEY → MISTRAL_API_KEY. Use 'mistral/${LLM_MODEL}' prefix to be explicit." ;;
+  moonshotai|meta-llama|deepseek-ai|MiniMaxAI|minimax-ai|Qwen|zai-org|mistralai|google)
+    echo "Warning: LLM_MODEL='$LLM_MODEL' uses sub-provider prefix '$LLM_PROVIDER'. This is a router-namespaced model (Together/OpenRouter). Mapping LLM_API_KEY → TOGETHER_API_KEY. If using OpenRouter, also set OPENROUTER_API_KEY as a separate secret."
+    export TOGETHER_API_KEY="${TOGETHER_API_KEY:-$LLM_API_KEY}" ;;
   # ── Fallback: Anthropic (default) ──
   *)
+    echo "Warning: Unknown provider prefix '$LLM_PROVIDER' in LLM_MODEL='$LLM_MODEL'. Defaulting to ANTHROPIC_API_KEY. If using a router-namespaced model (e.g. moonshotai/Kimi-K2.5), set TOGETHER_API_KEY or OPENROUTER_API_KEY as a separate secret."
     export ANTHROPIC_API_KEY="$LLM_API_KEY"
     ;;
 esac
@@ -553,6 +563,7 @@ ensure_chromium_for_browser_plugin() {
   echo "ERROR: Browser plugin is enabled, but Chromium install failed. Disable browser plugin or rebuild image with Chromium preinstalled." >&2
   return 1
 }
+HC_STARTUP_FAILURES=0
 ensure_chromium_for_browser_plugin || HC_STARTUP_FAILURES=$((HC_STARTUP_FAILURES + 1))
 
 # On Debian/Ubuntu, /usr/bin/chromium is often a shell wrapper while the real
@@ -676,7 +687,7 @@ CONFIG_JSON=$(jq \
    | (if $spaceHost != "" then
         .gateway.controlUi.allowedOrigins = ["https://" + $spaceHost]
       else . end)
-   | (if $password != "" then
+   | (if ($password != "" and (.gateway.auth.token // "") == "") then
         .gateway.auth.mode = "password" | .gateway.auth.password = $password
       else . end)' <<<"$CONFIG_JSON")
 
@@ -1374,7 +1385,7 @@ fi
 # Runs user-provided boot commands one by one so failures are visible in logs.
 # By default failures are logged and boot continues; set
 # HUGGINGCLAW_STARTUP_STRICT=true to fail the Space startup on any error.
-HC_STARTUP_FAILURES=0
+# HC_STARTUP_FAILURES initialized earlier (before Chromium ensure check)
 HC_STARTUP_STRICT_NORMALIZED=$(printf '%s' "${HUGGINGCLAW_STARTUP_STRICT:-false}" | tr '[:upper:]' '[:lower:]')
 hc_run_startup_command() {
   local source_label="$1"
@@ -1760,16 +1771,6 @@ while true; do
 
   # 11. Start WhatsApp Guardian after the gateway is accepting connections
   start_guardian_once
-
-  # ── Silence D-Bus errors for headless Chromium ──
-  if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
-    if command -v dbus-launch >/dev/null 2>&1; then
-      eval "$(dbus-launch --sh-syntax 2>/dev/null)" || true
-      export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-disabled:}"
-    else
-      export DBUS_SESSION_BUS_ADDRESS="disabled:"
-    fi
-  fi
 
   # 11.5 Warm up the managed browser so first browser actions have a live tab
   warmup_browser

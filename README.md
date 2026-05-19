@@ -241,7 +241,7 @@ Configure password access and network restrictions:
 
 | Variable | Default | Description |
 | :--- | :--- | :--- |
-| `OPENCLAW_PASSWORD` | — | Enable simple password auth instead of token |
+| `OPENCLAW_PASSWORD` | — | Enable simple password auth instead of token (applies only when `GATEWAY_TOKEN` is empty) |
 | `TRUSTED_PROXIES` | — | Comma-separated IPs of HF proxies |
 | `ALLOWED_ORIGINS` | — | Comma-separated allowed origins for Control UI |
 | `CLOUDFLARE_KEEPALIVE_ENABLED` | `true` | Set to `false` to disable the automatic Cloudflare KeepAlive worker |

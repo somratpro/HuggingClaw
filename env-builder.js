@@ -54,25 +54,25 @@ const MODEL_CATALOGS = {
     "Groq": [
       "groq/compound",
       "groq/compound-mini",
-      "llama-3.1-8b-instant",
-      "llama-3.1-70b-versatile",
-      "llama-3.3-70b-versatile",
+      "groq/llama-3.1-8b-instant",
+      "groq/llama-3.1-70b-versatile",
+      "groq/llama-3.3-70b-versatile",
       "meta-llama/llama-4-scout-17b-16e-instruct",
       "openai/gpt-oss-20b",
       "openai/gpt-oss-120b",
       "qwen/qwen3-32b",
-      "mixtral-8x7b-32768"
+      "groq/mixtral-8x7b-32768"
     ],
     "Mistral": [
-      "mistral-large-latest",
-      "mistral-large-2",
-      "mistral-medium-3.5",
-      "mistral-small-latest",
-      "mistral-small-3.2",
-      "devstral-2",
-      "ocr-3-premier",
-      "voxtral-mini-transcribe-realtime",
-      "codestral-latest"
+      "mistral/mistral-large-latest",
+      "mistral/mistral-large-2",
+      "mistral/mistral-medium-3.5",
+      "mistral/mistral-small-latest",
+      "mistral/mistral-small-3.2",
+      "mistral/devstral-2",
+      "mistral/ocr-3-premier",
+      "mistral/voxtral-mini-transcribe-realtime",
+      "mistral/codestral-latest"
     ],
     "Cohere": [
       "command-a",
@@ -280,25 +280,25 @@ const MODEL_CATALOGS = {
   "GROQ_MODELS": [
     "groq/compound",
     "groq/compound-mini",
-    "llama-3.1-8b-instant",
-    "llama-3.1-70b-versatile",
-    "llama-3.3-70b-versatile",
+    "groq/llama-3.1-8b-instant",
+    "groq/llama-3.1-70b-versatile",
+    "groq/llama-3.3-70b-versatile",
     "openai/gpt-oss-20b",
     "openai/gpt-oss-120b",
     "meta-llama/llama-4-scout-17b-16e-instruct",
     "qwen/qwen3-32b",
-    "mixtral-8x7b-32768"
+    "groq/mixtral-8x7b-32768"
   ],
   "MISTRAL_MODELS": [
-    "mistral-large-latest",
-    "mistral-large-2",
-    "mistral-medium-3.5",
-    "mistral-small-latest",
-    "mistral-small-3.2",
-    "devstral-2",
-    "ocr-3-premier",
-    "voxtral-mini-transcribe-realtime",
-    "codestral-latest"
+    "mistral/mistral-large-latest",
+    "mistral/mistral-large-2",
+    "mistral/mistral-medium-3.5",
+    "mistral/mistral-small-latest",
+    "mistral/mistral-small-3.2",
+    "mistral/devstral-2",
+    "mistral/ocr-3-premier",
+    "mistral/voxtral-mini-transcribe-realtime",
+    "mistral/codestral-latest"
   ],
   "XAI_MODELS": [
     "grok-4.3",
@@ -421,8 +421,7 @@ const FIELDS = [
     "icon": "⚡",
     "k": "LLM_MODEL",
     "lbl": "Default model ID",
-    "type": "model",
-    "options_key": "LLM_MODEL",
+    "type": "text",
     "ph": "choose a provider model",
     "common": 1,
     "tag": "critical"
@@ -644,11 +643,10 @@ const FIELDS = [
     "k": "WEBHOOK_URL",
     "lbl": "Webhook URL",
     "type": "text",
-    "ph": "https://...",
-    "tag": "feature"
+    "ph": "https://..."
   },
-{
-    "g": "Gateway",
+  {
+    "g": "Core",
     "icon": "⚡",
     "k": "GATEWAY_MAX_RESTARTS",
     "lbl": "Gateway max restarts",
@@ -1681,8 +1679,7 @@ const FIELDS = [
     "icon": "🔌",
     "k": "CUSTOM_MODEL_ID",
     "lbl": "Model ID",
-    "type": "model",
-    "options_key": "LLM_MODEL",
+    "type": "text",
     "ph": "custom model id",
     "tag": "feature"
   },
@@ -1733,7 +1730,7 @@ const FIELDS = [
     "k": "CUSTOM_MAX_TOKENS",
     "lbl": "Max output tokens",
     "type": "number",
-    "ph": "500",
+    "ph": "8192",
     "tag": "advanced"
   },
 {
@@ -2062,6 +2059,7 @@ function defaultValueFor(field) {
 }
 
 function valueControlHTML(field) {
+  if (!field || !field.k) return '<span style="color:red">Invalid field</span>';
   const key = esc(field.k);
   const placeholder = esc(field.ph || field.lbl || '');
   const isSecret = !!field.secret;
@@ -2101,7 +2099,6 @@ function valueControlHTML(field) {
       ${control}
     </div>`;
 
-  return control;
 }
 
 function cardHTML(f, origIdx = 0) {
@@ -2116,7 +2113,7 @@ function cardHTML(f, origIdx = 0) {
   const tm = TAG_META[f.tag] || TAG_META.optional;
   const badge = `<span class="badge ${tm.cls}">${tm.lbl}</span>`;
 
-  return `<div class="env-card" data-row data-orig-idx="${origIdx}" data-group="${esc(f.g)}" data-search="${esc((f.g + ' ' + f.k + ' ' + (f.lbl || '') + ' ' + (f.tag || '')).toLowerCase())}">
+  return `<div class="env-card" data-row data-orig-idx="${origIdx}" data-group="${esc(f.g)}" data-search="${esc((f.g + ' ' + f.k + ' ' + (f.lbl || '') + ' ' + (f.tag || '')).toLowerCase())}" data-tag="${esc(f.tag || 'optional')}">
     <div class="card-top">
       <input type="checkbox" class="card-check" data-check="${esc(f.k)}" ${f.common ? 'data-common="1"' : ''}>
       <div class="card-info">
@@ -2419,23 +2416,31 @@ function bindFieldEvents() {
 
 function renderSections() {
   const grouped = {};
-  FIELDS.forEach(f => { (grouped[f.g] ||= []).push(f); });
+  FIELDS.forEach(f => {
+    if (!f || !f.g || !f.k) return;
+    (grouped[f.g] ||= []).push(f);
+  });
 
   const wrap = $('sections');
+  if (!wrap) return;
   wrap.innerHTML = '';
   Object.entries(grouped).forEach(([grp, items]) => {
-    const sec = document.createElement('div');
-    sec.className = 'sec';
-    sec.dataset.section = grp;
-    sec.innerHTML = `
-      <div class="sec-header">
-        <span class="sec-icon">${ICONS[grp] || '📁'}</span>
-        <span class="sec-title">${esc(grp)}</span>
-        <span class="sec-count">${items.length}</span>
-        <div class="sec-line"></div>
-      </div>
-      <div class="cards">${items.map((f, i) => cardHTML(f, i)).join('')}</div>`;
-    wrap.appendChild(sec);
+    try {
+      const sec = document.createElement('div');
+      sec.className = 'sec';
+      sec.dataset.section = grp;
+      sec.innerHTML = `
+        <div class="sec-header">
+          <span class="sec-icon">${ICONS[grp] || '📁'}</span>
+          <span class="sec-title">${esc(grp)}</span>
+          <span class="sec-count">${items.length}</span>
+          <div class="sec-line"></div>
+        </div>
+        <div class="cards">${items.map((f, i) => { try { return cardHTML(f, i); } catch(e) { console.error('cardHTML error for field', f.k, e); return ''; } }).join('')}</div>`;
+      wrap.appendChild(sec);
+    } catch(e) {
+      console.error('renderSections error for group', grp, e);
+    }
   });
   bindFieldEvents();
 }
@@ -2458,14 +2463,26 @@ function copyText(text) {
 }
 
 // ── Init ──
-renderSidebar();
-renderSections();
-addCustomRow();
-filter();
-refresh();
+try {
+  renderSidebar();
+  renderSections();
+  addCustomRow();
+  filter();
+  refresh();
+} catch(e) {
+  console.error('HuggingClaw ENV Builder init error:', e);
+  const wrap = document.getElementById('sections');
+  if (wrap) wrap.innerHTML = '<div style="color:red;padding:20px">ENV Builder failed to load. Open browser console for details. Error: ' + e.message + '</div>';
+}
 
 // ── Events ──
 $('search').oninput = filter;
+$('selectRequired').onclick = () => {
+  document.querySelectorAll('[data-row][data-tag="critical"] [data-check]').forEach(c => c.checked = true);
+  sortAllSections();
+  markSelected();
+  refresh();
+};
 $('selectCommon').onclick = () => {
   document.querySelectorAll('[data-common="1"]').forEach(c => c.checked = true);
   sortAllSections();

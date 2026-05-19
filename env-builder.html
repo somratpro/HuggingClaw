@@ -130,6 +130,7 @@ body {
   background: var(--bg2);
   display: flex;
   flex-direction: column;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -577,6 +578,7 @@ body {
 .panel-scroll {
   flex: 1;
   overflow-y: auto;
+  min-height: 0;
   padding: 16px;
   display: flex;
   flex-direction: column;
@@ -734,6 +736,10 @@ body {
 ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
 
 /* ── Responsive ── */
+
+@media (max-width: 1100px) {
+  .toolbar-hint { display: none; }
+}
 @media (max-width: 900px) {
   :root { --panel-w: 280px; --sidebar-w: 180px; }
 }
@@ -775,6 +781,7 @@ body {
   flex-shrink: 0;
 }
 .tag-legend[open] .legend-hint { opacity: 0; }
+.toolbar-hint { color: var(--muted); font-size: 12px; margin-right: 10px; white-space: nowrap; }
 .legend-body {
   padding: 8px 12px 10px;
   border-top: 1px solid var(--border);
@@ -834,6 +841,7 @@ body {
 
     <!-- toolbar -->
     <div class="toolbar">
+      <div class="toolbar-hint">Tip: Start with <strong>⚡ Required</strong>, then fill keys and click <strong># Generate Bundle</strong>.</div>
       <div class="search-wrap">
         <span class="search-icon">⌕</span>
         <input id="search" type="text" placeholder="Search variables…" autocomplete="off" spellcheck="false">
@@ -841,6 +849,7 @@ body {
 
       <div class="tb-sep"></div>
 
+      <button id="selectRequired" class="btn" title="Select all critical variables first">⚡ Required</button>
       <button id="selectCommon" class="btn">★ Common</button>
       <button id="selectVisible" class="btn">☑ Visible</button>
       <button id="clearAll" class="btn btn-ghost">✕ Clear</button>
@@ -892,7 +901,6 @@ body {
       <aside class="right-panel">
         <div class="panel-scroll">
 
-          <!-- Summary -->
           <div class="pblock">
             <div class="pblock-head">
               <span class="pblock-title">📊 Summary</span>
