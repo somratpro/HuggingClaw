@@ -17,7 +17,8 @@ try {
 }
 const { randomUUID } = require('node:crypto');
 
-const GATEWAY_URL = "ws://127.0.0.1:7860";
+const GATEWAY_PORT = Number.parseInt(process.env.GATEWAY_PORT || "7860", 10);
+const GATEWAY_URL = `ws://127.0.0.1:${GATEWAY_PORT}`;
 const GATEWAY_TOKEN = process.env.GATEWAY_TOKEN || "huggingclaw";
 const WHATSAPP_ENABLED = /^true$/i.test(process.env.WHATSAPP_ENABLED || "");
 const CHECK_INTERVAL = 30000;
@@ -125,7 +126,8 @@ async function createConnection() {
   });
 }
 
-async function callRpc(ws, method, params) {
+async function callRpc(ws, method, params, timeoutMs) {
+  const ms = timeoutMs !== undefined ? timeoutMs : 10000; // default 10s for normal calls
   return new Promise((resolve, reject) => {
     const id = randomUUID();
     const handler = (data) => {
@@ -148,7 +150,7 @@ async function callRpc(ws, method, params) {
       reject(sendErr);
       return;
     }
-    setTimeout(() => { ws.removeListener("message", handler); reject(new Error("RPC Timeout")); }, WAIT_TIMEOUT + 5000);
+    setTimeout(() => { ws.removeListener("message", handler); reject(new Error("RPC Timeout")); }, ms);
   });
 }
 
@@ -188,7 +190,7 @@ async function checkStatus() {
     }
 
     console.log("[guardian] Waiting for pairing completion...");
-    const waitRes = await callRpc(ws, "web.login.wait", { timeoutMs: WAIT_TIMEOUT });
+    const waitRes = await callRpc(ws, "web.login.wait", { timeoutMs: WAIT_TIMEOUT }, WAIT_TIMEOUT + 5000);
     const result = waitRes.payload || waitRes.result;
     const message = result?.message || "";
     const linkedAfter515 = !result?.connected && message.includes("515");
@@ -202,19 +204,27 @@ async function checkStatus() {
       lastConnectedAt = Date.now();
       writeStatus({ configured: true, connected: true, pairing: false });
 
+      // Set shouldStop BEFORE config.apply — gateway restart during apply must not
+      // leave guardian running (it would then incorrectly wipe valid credentials).
+      shouldStop = true;
+
       if (linkedAfter515) {
         console.log("[guardian] 515 after scan: credentials saved, reloading config to start WhatsApp...");
       } else {
         console.log("[guardian] Pairing completed! Reloading config...");
       }
 
-      const getRes = await callRpc(ws, "config.get", {});
-      if (getRes.payload?.raw && getRes.payload?.hash) {
-        await callRpc(ws, "config.apply", { raw: getRes.payload.raw, baseHash: getRes.payload.hash });
-        console.log("[guardian] Configuration re-applied.");
+      try {
+        const getRes = await callRpc(ws, "config.get", {});
+        if (getRes.payload?.raw && getRes.payload?.hash) {
+          await callRpc(ws, "config.apply", { raw: getRes.payload.raw, baseHash: getRes.payload.hash });
+          console.log("[guardian] Configuration re-applied.");
+        }
+      } catch (applyErr) {
+        // Gateway restarted during config.apply — that is expected and fine.
+        // shouldStop is already true so we will not retry or attempt logout.
+        console.log(`[guardian] Config re-apply interrupted (gateway restarting): ${applyErr.message}`);
       }
-
-      shouldStop = true;
       setTimeout(() => process.exit(0), 1000);
     } else if (!message.includes("No active") && !message.includes("Still waiting")) {
       console.log(`[guardian] Wait result: ${message}`);

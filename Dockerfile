@@ -21,9 +21,12 @@ ENV DEV_MODE=${DEV_MODE}
 RUN apt-get update && apt-get install -y \
     git \
     sudo \
+    file \
     ca-certificates \
     jq \
     curl \
+    dbus \
+    dbus-x11 \
     python3 \
     python3-pip \
     chromium \

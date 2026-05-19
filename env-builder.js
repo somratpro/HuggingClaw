@@ -458,10 +458,10 @@ const FIELDS = [
     "g": "Core",
     "icon": "⚡",
     "k": "OPENCLAW_VERSION",
-    "lbl": "Pin OpenClaw version",
+    "lbl": "Pin OpenClaw version (build-time; rebuild required)",
     "type": "text",
     "ph": "latest",
-    "tag": "optional"
+    "tag": "build"
   },
 {
     "g": "Plugins",
@@ -481,6 +481,15 @@ const FIELDS = [
     "ph": "false",
     "common": 1,
     "tag": "build"
+  },
+{
+    "g": "Startup",
+    "icon": "🩺",
+    "k": "AUTO_DOCTOR",
+    "lbl": "Auto-fix config on boot (openclaw doctor --fix)",
+    "type": "toggle",
+    "ph": "false",
+    "tag": "advanced"
   },
 {
     "g": "Startup",
@@ -842,21 +851,11 @@ const FIELDS = [
     "g": "Core",
     "icon": "⚡",
     "k": "JUPYTER_TOKEN",
-    "lbl": "Jupyter access token",
+    "lbl": "Jupyter access token (Must NOT be 'huggingface'. Run: openssl rand -hex 32)",
     "type": "password",
-    "ph": "huggingface",
+    "ph": "change_this_to_a_strong_token",
     "common": 1,
     "tag": "credential"
-  },
-{
-    "g": "Core",
-    "icon": "⚡",
-    "k": "KEEP_ALIVE_INTERVAL",
-    "lbl": "Keep-alive ping interval (seconds)",
-    "type": "number",
-    "ph": "300",
-    "common": 1,
-    "tag": "advanced"
   },
 {
     "g": "Core",
@@ -965,24 +964,6 @@ const FIELDS = [
     "type": "text",
     "ph": "/home/node",
     "tag": "advanced"
-  },
-{
-    "g": "Backup",
-    "icon": "💾",
-    "k": "WORKSPACE_GIT_USER",
-    "lbl": "Workspace git author email",
-    "type": "text",
-    "ph": "openclaw@example.com",
-    "tag": "optional"
-  },
-{
-    "g": "Backup",
-    "icon": "💾",
-    "k": "WORKSPACE_GIT_NAME",
-    "lbl": "Workspace git author name",
-    "type": "text",
-    "ph": "OpenClaw Bot",
-    "tag": "optional"
   },
 {
     "g": "Provider Keys",
@@ -2123,7 +2104,7 @@ function valueControlHTML(field) {
   return control;
 }
 
-function cardHTML(f) {
+function cardHTML(f, origIdx = 0) {
   const TAG_META = {
     critical:   { cls: 'badge-critical',   lbl: 'critical'   },
     credential: { cls: 'badge-credential', lbl: 'credential' },
@@ -2135,7 +2116,7 @@ function cardHTML(f) {
   const tm = TAG_META[f.tag] || TAG_META.optional;
   const badge = `<span class="badge ${tm.cls}">${tm.lbl}</span>`;
 
-  return `<div class="env-card" data-row data-group="${esc(f.g)}" data-search="${esc((f.g + ' ' + f.k + ' ' + (f.lbl || '') + ' ' + (f.tag || '')).toLowerCase())}">
+  return `<div class="env-card" data-row data-orig-idx="${origIdx}" data-group="${esc(f.g)}" data-search="${esc((f.g + ' ' + f.k + ' ' + (f.lbl || '') + ' ' + (f.tag || '')).toLowerCase())}">
     <div class="card-top">
       <input type="checkbox" class="card-check" data-check="${esc(f.k)}" ${f.common ? 'data-common="1"' : ''}>
       <div class="card-info">
@@ -2213,14 +2194,17 @@ function collect() {
   return obj;
 }
 
-function refresh() {
+function generateBundle() {
   const obj = collect();
   const keys = Object.keys(obj).sort();
   const bundle = keys.length ? encodeBundle(Object.fromEntries(keys.map(k => [k, obj[k]]))) : '';
-
   $('bundleOut').value = bundle;
   $('envLineOut').value = bundle ? `HUGGINGCLAW_ENV_BUNDLE=${bundle}` : '';
+}
 
+function refresh() {
+  const obj = collect();
+  const keys = Object.keys(obj).sort();
   const s = $('summary');
   if (keys.length) {
     s.innerHTML = `<strong>${keys.length}</strong> variable${keys.length > 1 ? 's' : ''} selected<div class="sum-keys">${keys.map(k => `<span class="sum-key">${esc(k)}</span>`).join('')}</div>`;
@@ -2309,7 +2293,7 @@ function applyObj(obj, replace = false) {
       addCustomRow(key, val, true);
     }
   }
-  markSelected(); filter(); refresh();
+  sortAllSections(); markSelected(); filter(); refresh();
 }
 
 function autoCheck(key) {
@@ -2398,13 +2382,34 @@ function toggleField(key) {
   const chk = document.querySelector(`[data-check="${CSS.escape(key)}"]`);
   if (chk) {
     chk.checked = on;
+    sortSection(inp.closest('[data-row]'));
     markSelected();
   }
   refresh();
 }
 
+function sortSection(cardEl) {
+  const cards = cardEl && cardEl.closest('.cards');
+  if (!cards) return;
+  const all     = [...cards.querySelectorAll('[data-row]')];
+  const checked = all.filter(c =>  c.querySelector('[data-check]')?.checked);
+  const rest    = all.filter(c => !c.querySelector('[data-check]')?.checked);
+  rest.sort((a, b) => Number(a.dataset.origIdx) - Number(b.dataset.origIdx));
+  [...checked, ...rest].forEach(c => cards.appendChild(c));
+}
+
+function sortAllSections() {
+  document.querySelectorAll('.cards').forEach(cards => {
+    const all     = [...cards.querySelectorAll('[data-row]')];
+    const checked = all.filter(c =>  c.querySelector('[data-check]')?.checked);
+    const rest    = all.filter(c => !c.querySelector('[data-check]')?.checked);
+    rest.sort((a, b) => Number(a.dataset.origIdx) - Number(b.dataset.origIdx));
+    [...checked, ...rest].forEach(c => cards.appendChild(c));
+  });
+}
+
 function bindFieldEvents() {
-  document.querySelectorAll('[data-check]').forEach(el => el.addEventListener('change', () => { markSelected(); refresh(); }));
+  document.querySelectorAll('[data-check]').forEach(el => el.addEventListener('change', () => { sortSection(el.closest('[data-row]')); markSelected(); refresh(); }));
   document.querySelectorAll('[data-key]').forEach(el => el.addEventListener('input', refresh));
   document.querySelectorAll('[data-toggle]').forEach(btn => btn.addEventListener('click', () => toggleField(btn.dataset.toggle)));
   document.querySelectorAll('[data-pick-for]').forEach(sel => sel.addEventListener('change', () => handlePickerChange(sel)));
@@ -2429,7 +2434,7 @@ function renderSections() {
         <span class="sec-count">${items.length}</span>
         <div class="sec-line"></div>
       </div>
-      <div class="cards">${items.map(cardHTML).join('')}</div>`;
+      <div class="cards">${items.map((f, i) => cardHTML(f, i)).join('')}</div>`;
     wrap.appendChild(sec);
   });
   bindFieldEvents();
@@ -2463,56 +2468,40 @@ refresh();
 $('search').oninput = filter;
 $('selectCommon').onclick = () => {
   document.querySelectorAll('[data-common="1"]').forEach(c => c.checked = true);
+  sortAllSections();
   markSelected();
   refresh();
 };
 $('selectVisible').onclick = () => {
   document.querySelectorAll('.sec:not(.sec-hidden) [data-row]:not(.hidden) [data-check]').forEach(c => c.checked = true);
+  sortAllSections();
   markSelected();
   refresh();
 };
 $('clearAll').onclick = () => {
   clearForm();
+  sortAllSections();
   markSelected();
   filter();
   refresh();
 };
 $('applyImport').onclick = () => {
   try {
-    applyObj(parseEnv($('importText').value), true);
-    showToast('Imported ✓');
+    const parsed = parseEnv($('importText').value);
+    const count = Object.keys(parsed).length;
+    if (!count) {
+      showToast('No valid env keys found');
+      return;
+    }
+    applyObj(parsed, true);
+    showToast(`Imported ${count} key${count > 1 ? 's' : ''} ✓`);
   } catch (e) {
     showToast('Import failed');
     alert(e.message);
   }
 };
 
-// Auto-import: paste karo aur turant parse + apply ho jaata hai
-$('importText').addEventListener('paste', () => {
-  setTimeout(() => {
-    try {
-      const val = $('importText').value.trim();
-      if (!val) return;
-      applyObj(parseEnv(val), true);
-      showToast('Auto-imported ✓');
-    } catch (e) {
-      showToast('Import failed');
-    }
-  }, 0);
-});
-
-// Live typing: jaise jaise type karo env format mein, bundle banta jaata hai
-$('importText').addEventListener('input', () => {
-  const val = $('importText').value.trim();
-  if (!val) return;
-  // Sirf agar valid env/bundle format lag raha ho tabhi auto-apply
-  const looksLikeEnv = val.includes('=') || val.startsWith('{') || /^[A-Za-z0-9_\-]{20,}$/.test(val);
-  if (looksLikeEnv) {
-    try {
-      applyObj(parseEnv(val), true);
-    } catch (e) { /* silent — user abhi type kar raha hai */ }
-  }
-});
+// Import is explicit via the Import & Apply button to avoid surprising UI resets.
 $('addCustom').onclick = () => addCustomRow();
 $('applyBundle').onclick = () => {
   try {
@@ -2522,6 +2511,7 @@ $('applyBundle').onclick = () => {
     showToast('Invalid bundle');
   }
 };
+$('generateBundle').onclick = () => generateBundle();
 $('copyBundle').onclick = () => copyText($('bundleOut').value);
 $('copyEnvLine').onclick = () => copyText($('envLineOut').value);
 $('copyJson').onclick = () => copyText(JSON.stringify(collect(), null, 2));

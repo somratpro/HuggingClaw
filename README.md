@@ -20,7 +20,7 @@ secrets:
   - name: GATEWAY_TOKEN
     description: "Strong token to secure your OpenClaw Control UI (generate: openssl rand -hex 32)."
   - name: JUPYTER_TOKEN
-    description: "Optional strong token for the JupyterLab terminal at /terminal/ (defaults to huggingface)."
+    description: "Optional token for the JupyterLab terminal at /terminal/. Defaults to GATEWAY_TOKEN when set — no extra secret needed."
   - name: CLOUDFLARE_WORKERS_TOKEN
     description: "Cloudflare API token — auto-creates a Worker proxy and KeepAlive monitor."
   - name: TELEGRAM_ALLOWED_USERS
@@ -57,7 +57,6 @@ secrets:
 - [💻 Local Development](#-local-development)
 - [🔗 CLI Access](#-cli-access)
 - [💻 JupyterLab Terminal](#-jupyterlab-terminal)
-- [🔍 Merge Comparison](#-merge-comparison)
 - [🏗️ Architecture](#-architecture)
 - [💓 Staying Alive](#-staying-alive)
 - [🐛 Troubleshooting](#-troubleshooting)
@@ -78,7 +77,7 @@ secrets:
 - 📊 **Visual Dashboard:** Beautiful Web UI to monitor uptime, sync status, and active models.
 - 🔔 **Webhooks:** Get notified on restarts or backup failures via standard webhooks.
 - 🔐 **Flexible Auth:** Secure the Control UI with either a gateway token or password.
-- 💻 **Optional Dev Terminal:** JupyterLab is available at `/terminal/` only when `DEV_MODE=true` (disabled by default).
+- 💻 **Terminal Out of the Box:** JupyterLab is available at `/terminal/` automatically when `GATEWAY_TOKEN` is set — no extra config needed. `GATEWAY_TOKEN` is reused as the terminal auth token. Set `DEV_MODE=false` explicitly to opt out.
 - 🏠 **100% HF-Native:** Runs entirely on HuggingFace’s free infrastructure (2 vCPU, 16GB RAM).
 
 ## 🎥 Video Tutorial
@@ -104,7 +103,9 @@ Navigate to your new Space's **Settings**, scroll down to the **Variables and se
 > [!TIP]
 > HuggingClaw is completely flexible! You only need these three secrets to get started. You can set other secrets later.
 
-Optional: set `DEV_MODE=true` (Variable) to enable JupyterLab support and install Jupyter dependencies at build time. You can also set `JUPYTER_TOKEN` as a Secret to replace the default terminal token (`huggingface`). If you want to pin a specific OpenClaw release instead of `latest`, add `OPENCLAW_VERSION` under **Variables** in your Space settings. For Docker Spaces, HF passes Variables as build args during image build, so these should be Variables, not Secrets (except tokens).
+**Terminal auto-enables when `GATEWAY_TOKEN` is set** — no extra secrets needed. `GATEWAY_TOKEN` is reused as `JUPYTER_TOKEN`, so the terminal is protected by the same credential as the Control UI. To set a different token, add `JUPYTER_TOKEN` as a Secret. To disable the terminal entirely, set `DEV_MODE=false` as a Variable.
+
+If you want to pin a specific OpenClaw release instead of `latest`, add `OPENCLAW_VERSION` under **Variables** in your Space settings. For Docker Spaces, HF passes Variables as build args during image build, so these should be Variables, not Secrets (except tokens).
 
 ### Step 3: Deploy & Run
 
@@ -366,21 +367,12 @@ The merged Space includes the Hugging Face JupyterLab template behavior inside t
 | :--- | :--- | :--- | :--- |
 | `/` | HuggingClaw dashboard | `7861` | Public HF Spaces entrypoint |
 | `/app/` | OpenClaw Control UI | `7860` | Mounted behind the local reverse proxy |
-| `/terminal/` | JupyterLab terminal (DEV_MODE only) | `8888` | Available only when `DEV_MODE=true`; token login uses `JUPYTER_TOKEN` (default `huggingface`) |
+| `/terminal/` | JupyterLab terminal | `8888` | Auto-enabled when `GATEWAY_TOKEN` is set; uses `GATEWAY_TOKEN` as auth token unless `JUPYTER_TOKEN` is set separately. Set `DEV_MODE=false` to disable. |
 
 When enabled, the terminal notebook root is `/home/node`, so you can inspect HuggingClaw files, logs, workspace state, and runtime scripts from the browser.
 
 > [!IMPORTANT]
-> For real deployments, set a strong `JUPYTER_TOKEN` secret. The `huggingface` default exists only to match the duplicateable Hugging Face JupyterLab template.
-
-## 🔍 Merge Comparison
-
-This repository is a merge of two sources:
-
-- `anurag162008/HuggingClaw`: OpenClaw gateway, dashboard, Cloudflare proxy/keep-alive, Telegram/WhatsApp helpers, backup sync, key rotation, docs, and security metadata.
-- Hugging Face `SpacesExamples/jupyterlab` template: JupyterLab Docker behavior, token login UX, Hugging Face-branded login template, pinned Jupyter packages, and Git LFS defaults for large model/data artifacts.
-
-The main merge-specific change is the single-port router: HF Spaces exposes `7861`, while the router keeps OpenClaw at `/app/` and JupyterLab at `/terminal/` without leaking internal redirects such as `http://127.0.0.1:8888/...`.
+> No extra secret needed — `GATEWAY_TOKEN` is automatically reused as `JUPYTER_TOKEN`. Set a separate `JUPYTER_TOKEN` secret only if you want a different terminal credential.
 
 ## 🏗️ Architecture
 
@@ -402,7 +394,7 @@ HuggingClaw uses a multi-layered approach to ensure stability and persistence on
 2. Resolve backup namespace and restore workspace from HF Dataset.
 3. Generate `openclaw.json` configuration.
 4. Launch background tasks (auto-sync, channel helpers).
-5. Start the local dashboard/reverse proxy and OpenClaw gateway (JupyterLab starts only when `DEV_MODE=true`).
+5. Start the local dashboard/reverse proxy and OpenClaw gateway (JupyterLab starts when `GATEWAY_TOKEN` is set, `DEV_MODE=true`, or `HUGGINGCLAW_JUPYTER_ENABLED=true`).
 
 </details>
 
