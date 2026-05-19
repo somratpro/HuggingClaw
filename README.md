@@ -104,7 +104,7 @@ Navigate to your new Space's **Settings**, scroll down to the **Variables and se
 > [!TIP]
 > HuggingClaw is completely flexible! You only need these three secrets to get started. You can set other secrets later.
 
-Optional: set `DEV_MODE=true` (Variable) to enable JupyterLab support and install Jupyter dependencies at build time. You can also set `JUPYTER_TOKEN` as a Secret to replace the default terminal token (`huggingface`). If you want to pin a specific OpenClaw release instead of `latest`, add `OPENCLAW_VERSION` under **Variables** in your Space settings. For Docker Spaces, HF passes Variables as build args during image build, so these should be Variables, not Secrets (except tokens).
+Optional: set `DEV_MODE=true` (Variable) to enable JupyterLab support and install Jupyter dependencies at build time. You can also set `JUPYTER_TOKEN` as a Secret to set a strong terminal token (must not be `huggingface`). If you want to pin a specific OpenClaw release instead of `latest`, add `OPENCLAW_VERSION` under **Variables** in your Space settings. For Docker Spaces, HF passes Variables as build args during image build, so these should be Variables, not Secrets (except tokens).
 
 ### Step 3: Deploy & Run
 
@@ -366,12 +366,12 @@ The merged Space includes the Hugging Face JupyterLab template behavior inside t
 | :--- | :--- | :--- | :--- |
 | `/` | HuggingClaw dashboard | `7861` | Public HF Spaces entrypoint |
 | `/app/` | OpenClaw Control UI | `7860` | Mounted behind the local reverse proxy |
-| `/terminal/` | JupyterLab terminal (DEV_MODE only) | `8888` | Available only when `DEV_MODE=true`; token login uses `JUPYTER_TOKEN` (default `huggingface`) |
+| `/terminal/` | JupyterLab terminal (DEV_MODE only) | `8888` | Available only when `DEV_MODE=true`; token login uses `JUPYTER_TOKEN` (set a strong value) |
 
 When enabled, the terminal notebook root is `/home/node`, so you can inspect HuggingClaw files, logs, workspace state, and runtime scripts from the browser.
 
 > [!IMPORTANT]
-> For real deployments, set a strong `JUPYTER_TOKEN` secret. The `huggingface` default exists only to match the duplicateable Hugging Face JupyterLab template.
+> For real deployments, set a strong `JUPYTER_TOKEN` secret. Do not use `huggingface`; generate a strong token with `openssl rand -hex 32`.
 
 ## 🔍 Merge Comparison
 

@@ -24,6 +24,8 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     jq \
     curl \
+    dbus \
+    dbus-x11 \
     python3 \
     python3-pip \
     chromium \

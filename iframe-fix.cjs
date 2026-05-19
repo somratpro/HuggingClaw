@@ -19,9 +19,10 @@ http.Server.prototype.emit = function (event, ...args) {
   if (event === "request") {
     const [, res] = args;
 
-    // Only intercept on the main OpenClaw server (port 7860)
+    // Only intercept on the main OpenClaw server (respects GATEWAY_PORT env var)
+    const expectedPort = Number(process.env.GATEWAY_PORT || 7860);
     const serverPort = this.address && this.address() && this.address().port;
-    if (serverPort && serverPort !== 7860) {
+    if (serverPort && serverPort !== expectedPort) {
       return origEmit.apply(this, [event, ...args]);
     }
 
