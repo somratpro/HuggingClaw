@@ -21,6 +21,7 @@ ENV DEV_MODE=${DEV_MODE}
 RUN apt-get update && apt-get install -y \
     git \
     sudo \
+    file \
     ca-certificates \
     jq \
     curl \
