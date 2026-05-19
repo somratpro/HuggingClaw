@@ -90,6 +90,12 @@ DEV_MODE_ENABLED=false
 if hc_is_true "$DEV_MODE_NORMALIZED"; then
   DEV_MODE_ENABLED=true
 fi
+# Auto-enable DEV_MODE when GATEWAY_TOKEN is set and DEV_MODE was not explicitly configured.
+# GATEWAY_TOKEN doubles as JUPYTER_TOKEN (see start_jupyter_once) — no extra secret required.
+if [ "$DEV_MODE_ENABLED" != "true" ] && [ -z "${DEV_MODE:-}" ] && [ -n "${GATEWAY_TOKEN:-}" ]; then
+  DEV_MODE_ENABLED=true
+  echo "GATEWAY_TOKEN set and DEV_MODE not explicitly configured — auto-enabling terminal (set DEV_MODE=false to opt out)"
+fi
 SYNC_INTERVAL="$(trim_var "${SYNC_INTERVAL:-180}")"
 DEVDATA_DATASET_NAME="$(trim_var "${DEVDATA_DATASET_NAME:-huggingclaw-devdata}")"
 DEVDATA_SYNC_INTERVAL="$(trim_var "${DEVDATA_SYNC_INTERVAL:-180}")"
@@ -846,6 +852,13 @@ start_jupyter_once() {
   [ "$RUNTIME_JUPYTER_ENABLED" = "true" ] || return 0
   if [ -n "${JUPYTER_PID:-}" ] && kill -0 "$JUPYTER_PID" 2>/dev/null; then
     return 0
+  fi
+
+  # GATEWAY_TOKEN fallback: if JUPYTER_TOKEN is unset or still the insecure default,
+  # reuse GATEWAY_TOKEN. Both protect the same Space, so the credential is equivalent.
+  if { [ -z "${JUPYTER_TOKEN:-}" ] || [ "${JUPYTER_TOKEN}" = "huggingface" ]; } && [ -n "${GATEWAY_TOKEN:-}" ]; then
+    JUPYTER_TOKEN="$GATEWAY_TOKEN"
+    echo "JUPYTER_TOKEN not set — using GATEWAY_TOKEN as terminal auth token"
   fi
 
   # Security guard: refuse to start JupyterLab with the insecure default token.

@@ -20,9 +20,12 @@ const GATEWAY_HOST = "127.0.0.1";
 const JUPYTER_PORT = Number.parseInt(process.env.JUPYTER_PORT || "8888", 10);
 const JUPYTER_HOST = "127.0.0.1";
 const JUPYTER_BASE = normalizeBase(process.env.JUPYTER_BASE, "/terminal");
+const GATEWAY_TOKEN = (process.env.GATEWAY_TOKEN || "").trim();
 const DEV_MODE_ENABLED = isTrue(process.env.DEV_MODE);
+// Auto-enable Jupyter when DEV_MODE=true, HUGGINGCLAW_JUPYTER_ENABLED=true, or GATEWAY_TOKEN is set.
+// GATEWAY_TOKEN doubles as JUPYTER_TOKEN in start.sh — no extra secret needed.
 const JUPYTER_ENABLED = /^(true|1|yes|on)$/i.test(
-  process.env.HUGGINGCLAW_JUPYTER_ENABLED || (DEV_MODE_ENABLED ? "true" : "false")
+  process.env.HUGGINGCLAW_JUPYTER_ENABLED || (DEV_MODE_ENABLED ? "true" : GATEWAY_TOKEN ? "true" : "false")
 );
 const startTime = Date.now();
 const LLM_MODEL = process.env.LLM_MODEL || "Not Set";
